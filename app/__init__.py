@@ -4,8 +4,11 @@ from app.cli import register_cli
 from app.config import DEV_SECRET_KEY, config_map
 from app.extensions import db, limiter, login_manager, migrate
 from app.models.user import User
+from app.routes.admin_orders import admin_orders_bp
 from app.routes.auth import auth_bp
+from app.routes.kitchen import kitchen_bp
 from app.routes.orders import orders_bp
+from app.routes.payments import payments_bp
 
 
 @login_manager.user_loader
@@ -50,6 +53,9 @@ def create_app(config_name="development"):
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(orders_bp)
+    app.register_blueprint(admin_orders_bp)
+    app.register_blueprint(payments_bp)
+    app.register_blueprint(kitchen_bp)
 
     register_cli(app)
 

@@ -39,7 +39,7 @@ def get_engine_url():
 config.set_main_option('sqlalchemy.url', get_engine_url())
 target_db = current_app.extensions['migrate'].db
 
-# other values for the config, defined by the needs of env.py,
+# other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
@@ -56,8 +56,8 @@ def run_migrations_offline():
 
     This configures the context with just a URL
     and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
+    here as well. By skipping the Engine creation
+    we do not even need a DBAPI to be available.
 
     Calls to context.execute() here emit the given string to the
     script output.
@@ -76,7 +76,7 @@ def run_migrations_online():
     """Run migrations in 'online' mode.
 
     In this scenario we need to create an Engine
-    and associate a connection with the context.
+    and associate it with a connection.
 
     """
 

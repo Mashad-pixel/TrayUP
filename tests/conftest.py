@@ -1,4 +1,6 @@
 import pytest
+from flask import g, has_app_context
+from flask.testing import FlaskClient
 
 from app import create_app
 from app.extensions import db
@@ -6,9 +8,23 @@ from app.models.menu import MenuItem
 from app.models.user import User
 
 
+class IsolatedClient(FlaskClient):
+    """Test client that clears Flask-Login's cached user before each request.
+
+    Flask-Login caches the logged-in user in flask.g. Tests keep one app context open,
+    so without this, a request from one logged-in client could reuse another client's user.
+    """
+
+    def open(self, *args, **kwargs):
+        if has_app_context():
+            g.pop("_login_user", None)
+        return super().open(*args, **kwargs)
+
+
 @pytest.fixture
 def app():
     app = create_app("testing")
+    app.test_client_class = IsolatedClient
 
     with app.app_context():
         db.create_all()

@@ -43,6 +43,11 @@ class TestingConfig(Config):
     RATELIMIT_ENABLED = False
     RATELIMIT_STORAGE_URI = "memory://"
 
+    # Always empty in tests, even if .env has real keys, so tests never call Razorpay.
+    RAZORPAY_KEY_ID = ""
+    RAZORPAY_KEY_SECRET = ""
+    RAZORPAY_WEBHOOK_SECRET = ""
+
 
 class ProductionConfig(Config):
     DEBUG = False
