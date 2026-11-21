@@ -1,8 +1,7 @@
-import base64
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from flask import current_app
 
@@ -11,19 +10,10 @@ from app.models.collection_token import CollectionToken
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_status_history import OrderStatusHistory
 from app.services.errors import OrderError
+from app.services.time_utils import as_utc, utcnow
 
 
-def utcnow():
-    return datetime.now(timezone.utc)
-
-
-def as_utc(value):
-    """SQLite returns naive datetimes. Treat them as UTC so comparisons work."""
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+TOKEN_BYTES = 32
 
 
 def _hash_token(raw_token):
@@ -31,43 +21,29 @@ def _hash_token(raw_token):
 
 
 def _derive_token(order_id, nonce):
-    """Build the raw token from SECRET_KEY, the order ID, and the stored nonce.
-
-    The same inputs always give the same token, so the student sees the same QR
-    after reloading. Without SECRET_KEY, the token can't be predicted.
-    """
-    secret = current_app.config["SECRET_KEY"].encode("utf-8")
-    message = f"collection:{order_id}:{nonce}".encode("utf-8")
-    digest = hmac.new(secret, message, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    """Derive the same opaque token after a page reload without storing it in plaintext."""
+    key = current_app.config["SECRET_KEY"].encode("utf-8")
+    message = f"trayup:collection:{order_id}:{nonce}".encode("utf-8")
+    digest = hmac.new(key, message, hashlib.sha256).digest()
+    return secrets.base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 def _active_token_for(order_id):
     now = utcnow()
-    unused = (
-        CollectionToken.query.filter_by(order_id=order_id, used_at=None)
-        .order_by(CollectionToken.id.desc())
-        .all()
+    return (
+        CollectionToken.query.filter_by(order_id=order_id)
+        .filter(CollectionToken.used_at.is_(None))
+        .filter(CollectionToken.expires_at > now)
+        .order_by(CollectionToken.created_at.desc())
+        .first()
     )
-    for token in unused:
-        if as_utc(token.expires_at) > now:
-            return token
-    return None
 
 
 def issue_collection_token(order_id):
-    """Create a new token and expire any older unused ones.
-
-    Returns the raw token. Only its hash is stored. The caller must commit.
-    """
-    now = utcnow()
-
-    for old in CollectionToken.query.filter_by(order_id=order_id, used_at=None).all():
-        if as_utc(old.expires_at) > now:
-            old.expires_at = now
-
-    nonce = secrets.token_hex(16)
+    """Create a new per-order code. The database stores only its hash and nonce."""
+    nonce = secrets.token_urlsafe(TOKEN_BYTES)
     raw_token = _derive_token(order_id, nonce)
+    now = utcnow()
     expiry_minutes = current_app.config["COLLECTION_TOKEN_EXPIRY_MINUTES"]
 
     db.session.add(CollectionToken(

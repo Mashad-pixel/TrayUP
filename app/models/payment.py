@@ -3,8 +3,11 @@ from app.models.order import utcnow
 
 
 class PaymentRecordStatus:
-    CREATED = "created"  # Razorpay order exists, waiting for payment
-    PAID = "paid"        # Payment captured and verified
+    CREATED = "created"                        # Razorpay order exists, waiting for payment
+    PAID = "paid"                              # Payment captured and confirmed for the order
+    REFUND_REQUIRED = "refund_required"        # Money captured, but the order can't be fulfilled
+    PARTIALLY_REFUNDED = "partially_refunded"  # Some of the money has been returned
+    REFUNDED = "refunded"                      # All of the money has been returned
 
 
 class Payment(db.Model):
@@ -28,7 +31,7 @@ class Payment(db.Model):
     # Razorpay order ID (order_...). Unique, so one Razorpay order maps to one row.
     provider_order_id = db.Column(db.String(64), unique=True, nullable=False, index=True)
 
-    # Razorpay payment ID (pay_...). Set only after a payment is verified.
+    # Razorpay payment ID (pay_...). Set once a payment is captured.
     provider_payment_id = db.Column(db.String(64), unique=True, nullable=True)
 
     amount_paise = db.Column(db.Integer, nullable=False)

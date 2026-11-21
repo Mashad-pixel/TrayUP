@@ -3,6 +3,7 @@ from flask.cli import with_appcontext
 
 from app.extensions import db
 from app.models.user import User, UserRole
+from app.services.order_service import expire_unpaid_orders
 
 MIN_PASSWORD_LENGTH = 8
 
@@ -45,5 +46,18 @@ def create_user_command(name, email, role, password):
     click.echo(f"Created {user.role} user {user.email} (id {user.id}).")
 
 
+@click.command("expire-orders")
+@with_appcontext
+def expire_orders_command():
+    """Cancel unpaid orders whose payment window has closed, and free their stock.
+
+    Run this on a schedule (for example every minute) so stock is released even when
+    no new orders are coming in.
+    """
+    count = expire_unpaid_orders()
+    click.echo(f"Expired {count} unpaid order(s).")
+
+
 def register_cli(app):
     app.cli.add_command(create_user_command)
+    app.cli.add_command(expire_orders_command)

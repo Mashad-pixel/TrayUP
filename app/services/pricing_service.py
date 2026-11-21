@@ -1,138 +1,109 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from app.models.menu import MenuItem
 from app.services.errors import OrderError
 
-MAX_LINE_QUANTITY = 20
-MAX_ITEMS_PER_ORDER = 30
+MAX_ITEMS_PER_ORDER = 20
+MAX_QUANTITY_PER_ITEM = 20
 
 
-@dataclass
+@dataclass(frozen=True)
 class PricedLine:
     menu_item_id: int
     item_name: str
     unit_price_paise: int
     quantity: int
-
-    @property
-    def line_total_paise(self):
-        return self.unit_price_paise * self.quantity
+    line_total_paise: int
+    stock_tracked: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class PricedOrder:
-    lines: list = field(default_factory=list)
-    subtotal_paise: int = 0
-    discount_paise: int = 0
-    tax_paise: int = 0
-    total_paise: int = 0
-
-
-def _parse_menu_item_id(value):
-    # bool is a subclass of int in Python, so it is rejected explicitly
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise OrderError("INVALID_ITEM", "Each item needs a valid menu_item_id.")
-    return value
-
-
-def _parse_quantity(value):
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise OrderError("INVALID_QUANTITY", "Quantity must be a whole number.")
-    if value < 1 or value > MAX_LINE_QUANTITY:
-        raise OrderError(
-            "INVALID_QUANTITY",
-            f"Quantity must be between 1 and {MAX_LINE_QUANTITY}.",
-        )
-    return value
+    lines: list[PricedLine]
+    subtotal_paise: int
+    discount_paise: int
+    tax_paise: int
+    total_paise: int
 
 
 def normalize_requested_items(raw_items):
-    """Validate the request's item list and return {menu_item_id: quantity}.
-
-    Only menu_item_id and quantity are read. Any price fields sent by the
-    frontend are ignored on purpose.
-    """
+    """Validate and combine repeated menu item IDs. Returns [(id, quantity), ...]."""
     if not isinstance(raw_items, list) or not raw_items:
-        raise OrderError("EMPTY_ORDER", "Order must contain at least one item.")
+        raise OrderError("INVALID_ITEMS", "Order must contain at least one item.")
 
-    if len(raw_items) > MAX_ITEMS_PER_ORDER:
-        raise OrderError(
-            "TOO_MANY_ITEMS",
-            f"An order can contain at most {MAX_ITEMS_PER_ORDER} items.",
-        )
-
-    requested = {}
-    for raw in raw_items:
-        if not isinstance(raw, dict):
+    combined = {}
+    for item in raw_items:
+        if not isinstance(item, dict):
             raise OrderError("INVALID_ITEM", "Each item must be an object.")
 
-        item_id = _parse_menu_item_id(raw.get("menu_item_id"))
-        quantity = _parse_quantity(raw.get("quantity"))
+        menu_item_id = item.get("menu_item_id")
+        quantity = item.get("quantity")
 
-        if item_id in requested:
+        if isinstance(menu_item_id, bool) or not isinstance(menu_item_id, int) or menu_item_id < 1:
+            raise OrderError("INVALID_MENU_ITEM", "menu_item_id must be a positive integer.")
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity < 1:
+            raise OrderError("INVALID_QUANTITY", "quantity must be a positive integer.")
+
+        combined[menu_item_id] = combined.get(menu_item_id, 0) + quantity
+        if combined[menu_item_id] > MAX_QUANTITY_PER_ITEM:
             raise OrderError(
-                "DUPLICATE_ITEM",
-                "Each menu item may appear only once. Combine the quantities instead.",
+                "QUANTITY_TOO_LARGE",
+                f"Maximum quantity per item is {MAX_QUANTITY_PER_ITEM}.",
             )
-        requested[item_id] = quantity
 
-    return requested
+    if len(combined) > MAX_ITEMS_PER_ORDER:
+        raise OrderError("TOO_MANY_ITEMS", f"Maximum distinct items per order is {MAX_ITEMS_PER_ORDER}.")
+
+    return list(combined.items())
 
 
-def price_order(requested):
-    """Look up real prices from the database and build the order totals.
+def price_order(requested_items):
+    """Fetch trusted prices and calculate a total. Never accepts prices from the client."""
+    menu_ids = [menu_id for menu_id, _ in requested_items]
+    menu_items = MenuItem.query.filter(MenuItem.id.in_(menu_ids)).all()
+    by_id = {item.id: item for item in menu_items}
 
-    `requested` is the {menu_item_id: quantity} dict from normalize_requested_items.
-    """
-    items = MenuItem.query.filter(MenuItem.id.in_(list(requested.keys()))).all()
-    items_by_id = {item.id: item for item in items}
+    if len(by_id) != len(menu_ids):
+        raise OrderError("MENU_ITEM_NOT_FOUND", "One or more menu items no longer exist.", 404)
 
     lines = []
-    for item_id, quantity in requested.items():
-        item = items_by_id.get(item_id)
+    subtotal = 0
 
-        if item is None:
-            raise OrderError(
-                "ITEM_NOT_FOUND",
-                f"Menu item {item_id} does not exist.",
-                404,
-            )
+    for menu_item_id, quantity in requested_items:
+        item = by_id[menu_item_id]
 
         if not item.is_available:
-            raise OrderError(
-                "ITEM_UNAVAILABLE",
-                f"'{item.name}' is not available right now.",
-                409,
-            )
+            raise OrderError("ITEM_UNAVAILABLE", f"'{item.name}' is currently unavailable.", 409)
 
-        # Read-only check. Stock reservation with atomic updates belongs to the inventory service.
-        if item.stock_quantity is not None and item.stock_quantity < quantity:
-            raise OrderError(
-                "INSUFFICIENT_STOCK",
-                f"Only {item.stock_quantity} of '{item.name}' left.",
-                409,
-            )
+        if item.stock_quantity is not None:
+            available = item.stock_quantity - item.reserved_quantity
+            if available < quantity:
+                if available <= 0:
+                    raise OrderError("INSUFFICIENT_STOCK", f"'{item.name}' is sold out.", 409)
+                raise OrderError(
+                    "INSUFFICIENT_STOCK",
+                    f"Only {available} of '{item.name}' left.",
+                    409,
+                )
 
-        lines.append(
-            PricedLine(
-                menu_item_id=item.id,
-                item_name=item.name,
-                unit_price_paise=item.price_paise,
-                quantity=quantity,
-            )
-        )
+        line_total = item.price_paise * quantity
+        subtotal += line_total
+        lines.append(PricedLine(
+            menu_item_id=item.id,
+            item_name=item.name,
+            unit_price_paise=item.price_paise,
+            quantity=quantity,
+            line_total_paise=line_total,
+            stock_tracked=item.stock_quantity is not None,
+        ))
 
-    subtotal = sum(line.line_total_paise for line in lines)
-
-    # Discount and tax rules are not defined yet, so both stay at 0.
+    # Keep the first release's pricing deliberately simple. Taxes/discounts can be added centrally.
     discount = 0
     tax = 0
-    total = subtotal - discount + tax
-
     return PricedOrder(
         lines=lines,
         subtotal_paise=subtotal,
         discount_paise=discount,
         tax_paise=tax,
-        total_paise=total,
+        total_paise=subtotal - discount + tax,
     )

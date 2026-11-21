@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from app.models.user import UserRole
 from app.responses import error_response, success_response
@@ -19,8 +19,11 @@ from app.services.order_serializer import (
     serialize_order_for_admin,
     serialize_status_history,
 )
+from app.services.order_service import cancel_order
 
 admin_orders_bp = Blueprint("admin_orders", __name__, url_prefix="/api/admin/orders")
+
+MAX_CANCEL_REASON = 255
 
 
 def _order_error(exc):
@@ -68,3 +71,33 @@ def get_any_order(order_id):
     data["status_history"] = serialize_status_history(get_status_history(order.id))
 
     return success_response("Order retrieved", data)
+
+
+@admin_orders_bp.route("/<int:order_id>/cancel", methods=["POST"])
+@login_required
+@roles_required(UserRole.ADMIN)
+def cancel_order_route(order_id):
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
+
+    reason = payload.get("reason", "Cancelled by admin")
+    if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > MAX_CANCEL_REASON:
+        return error_response(
+            "INVALID_REASON",
+            f"'reason' must be text of 1 to {MAX_CANCEL_REASON} characters.",
+            400,
+        )
+
+    try:
+        order, refund_required = cancel_order(order_id, current_user.id, reason.strip())
+    except OrderError as exc:
+        return _order_error(exc)
+
+    students = get_students_for_orders([order])
+    data = serialize_order_for_admin(order, students.get(order.student_id))
+    # True when money was captured and must be refunded through /api/admin/payments/<id>/refund.
+    data["refund_required"] = refund_required
+    return success_response("Order cancelled", data)
