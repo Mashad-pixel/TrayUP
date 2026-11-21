@@ -30,8 +30,6 @@ trayUP is a mobile-first web application for college canteens. Students scan a Q
 21. Development Roadmap
 22. Success Metrics
 23. Future Enhancements
-24. Contribution Guidelines
-25. License
 
 ---
 
