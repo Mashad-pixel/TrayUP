@@ -1,290 +1,926 @@
-# trayUP: Backend
+# trayUP
+### Smart College Canteen — QR-Based Online Ordering & Payment System
 
-Backend for trayUP, a QR-based online ordering and payment system for a college canteen. Students order from a menu, pay online, and collect food. Kitchen staff and admins manage orders.
+trayUP is a mobile-first web application for college canteens. Students scan a QR code to browse the menu, place food orders, pay online, and track preparation. Kitchen staff manage incoming paid orders and verify collection, while administrators manage menu items, staff, orders, and sales.
 
-## Status
+> **Project Status:** Development roadmap / planned implementation. Features described below should be treated as planned until they have been implemented and tested.
 
-**Implemented**
+## Table of Contents
 
-- Login, logout, and current-user endpoints (session-based, Flask-Login)
-- Account creation from the command line (staff, admin, and student roles)
-- Menu item model with prices in paise, availability, and optional stock
-- Order creation with server-side pricing, idempotency keys, and price snapshots
-- Database migration for users, menu items, orders, and order items
-- 27 automated tests
+1. Project Overview
+2. Problem Statement
+3. Goals
+4. User Roles
+5. Main Workflows
+6. Technology Stack
+7. System Architecture
+8. Project Structure
+9. Database Design
+10. Order and Payment Statuses
+11. API Overview
+12. Payment Integration
+13. QR Code and Collection Security
+14. Inventory and Failure Handling
+15. Security Requirements
+16. Real-Time Updates and Notifications
+17. Local Development Setup
+18. Environment Variables
+19. Testing
+20. Deployment Plan
+21. Development Roadmap
+22. Success Metrics
+23. Future Enhancements
+24. Contribution Guidelines
+25. License
 
-**Not yet implemented**
+---
 
-- Razorpay payments (create order, verify, webhooks, refunds)
-- Kitchen queue and status updates
-- Collection QR generation and verification
-- Inventory reservation
-- Admin reports
-- Menu management API
-- Frontend pages
+## 1. Project Overview
 
-## Requirements
+trayUP connects students, canteen kitchen staff, and administrators through one web application.
 
-- Python 3.10 or newer (tested on Python 3.12 and 3.14)
-- Windows PowerShell or any terminal
+The system is designed to reduce physical queues, simplify digital ordering, provide clear order status updates, and maintain reliable digital records of orders and payments.
 
-## Setup
+The application has three primary interfaces:
 
-From the project folder:
+**Student Interface**
+- QR-based menu access.
+- Browse food items.
+- Add items to cart.
+- Checkout and online payment.
+- Digital receipt.
+- Real-time order tracking.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
+**Kitchen Interface**
+- Secure staff login.
+- View incoming paid orders.
+- Manage food preparation.
+- Update order status.
+- Scan and verify collection QR codes.
+
+**Admin Interface**
+- Manage menu items and prices.
+- Manage availability and inventory.
+- Manage staff accounts.
+- View and manage orders.
+- Monitor payments and refunds.
+- View sales reports and analytics.
+
+## 2. Problem Statement
+
+Traditional college canteens often face:
+
+- Long queues during peak hours.
+- Slow manual ordering and cash payments.
+- No reliable way for students to check order progress.
+- Confusion in the kitchen about items and quantities.
+- Cash handling and reconciliation errors.
+- Limited digital sales and inventory records.
+
+trayUP aims to solve these problems through a centralized digital ordering and kitchen management system.
+
+## 3. Goals
+
+- Allow students to open the menu by scanning a QR code.
+- Display current food prices and availability.
+- Allow students to place orders without requiring an account in the first release.
+- Calculate the final order amount securely on the backend.
+- Accept online payments through Razorpay.
+- Send only verified, captured paid orders to the kitchen.
+- Provide student-facing order tracking.
+- Generate digital receipts and secure collection QR codes.
+- Prevent duplicate payment processing and duplicate collection.
+- Give administrators control over menu items, staff, orders, and reports.
+
+## 4. User Roles
+
+### Student
+
+- Scan the canteen QR code.
+- Browse available food items.
+- Add items and quantities to a cart.
+- Enter name and phone number.
+- Pay through Razorpay Checkout.
+- View a receipt and track order status.
+- Present the collection QR code when the order is ready.
+
+### Kitchen Staff
+
+- Log in using assigned credentials.
+- View incoming paid orders.
+- Review order items, quantities, instructions, and timestamps.
+- Update preparation statuses.
+- Scan and verify collection QR codes.
+- Confirm food handover.
+
+### Admin / Manager
+
+- Manage menu items, categories, prices, and availability.
+- Manage staff accounts and roles.
+- View and search orders.
+- Review payment and refund states.
+- Configure canteen availability and operating settings.
+- View sales and operational reports.
+
+Public staff registration should not be enabled. Administrators should create staff accounts.
+
+## 5. Main Workflows
+
+### 5.1 Student Ordering Workflow
+
+1. Student scans the printed canteen QR code.
+2. The trayUP menu opens in the mobile browser.
+3. Student browses available items.
+4. Student adds items and quantities to the cart.
+5. Student enters basic customer details.
+6. Backend validates item IDs and quantities.
+7. Backend retrieves current prices from the database.
+8. Backend calculates the total in paise.
+9. Backend creates an internal order and item-price snapshots.
+10. Backend creates a Razorpay order for the server-calculated amount.
+11. Student completes payment through Razorpay Checkout.
+12. Backend verifies the payment response and confirms captured payment.
+13. The paid order becomes available to the kitchen.
+14. Student tracks the order.
+15. Student presents the collection QR when the order is ready.
+16. Kitchen staff verify and confirm the handover.
+
+### 5.2 Kitchen Workflow
+
+1. Staff logs in.
+2. New paid orders appear in the kitchen dashboard.
+3. Staff reviews items, quantities, and instructions.
+4. Staff changes the order to PREPARING.
+5. Staff changes it to READY when preparation is complete.
+6. Student presents the collection QR.
+7. Staff scans the QR.
+8. Backend verifies payment, order status, token validity, and unused state.
+9. Staff confirms the handover.
+10. Backend marks the order COLLECTED and invalidates the collection token.
+
+### 5.3 Admin Workflow
+
+1. Admin logs in.
+2. Admin creates and updates menu items.
+3. Admin controls item availability and stock.
+4. Admin creates or disables staff accounts.
+5. Admin reviews orders and payment states.
+6. Admin handles cancellation and refund workflows.
+7. Admin reviews sales and operational reports.
+
+## 6. Technology Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Frontend | HTML, CSS, JavaScript | Responsive interfaces |
+| Backend | Python, Flask | Application server and REST APIs |
+| ORM | Flask-SQLAlchemy | Database access |
+| Migrations | Flask-Migrate | Database schema changes |
+| Development Database | SQLite | Local development |
+| Production Database | PostgreSQL | Persistent production records |
+| Payments | Razorpay | Online payment processing |
+| QR Generation | Python qrcode | QR code generation |
+| Authentication | Flask sessions / Flask-Login | Staff authentication |
+| CSRF Protection | Flask-WTF | Request protection |
+| Rate Limiting | Flask-Limiter | API protection |
+| Testing | pytest | Automated testing |
+| Production Server | Gunicorn | Application serving |
+
+### Initial Implementation Choices
+
+- Use guest checkout for students in the first release.
+- Use secure sessions and role-based authorization for staff.
+- Use short-interval polling for order updates initially.
+- Consider WebSockets after the core workflow is stable.
+- Keep frontend and backend in one Flask application for the first release.
+
+## 7. System Architecture
+
+```text
+                   STUDENT MOBILE BROWSER
+                QR → Menu → Cart → Checkout
+                              |
+                              v
+                     FLASK APPLICATION
+           ---------------------------------------
+           | Orders | Pricing | Payments         |
+           | Auth   | Kitchen | Collection QR    |
+           | Admin  | Reports | Inventory        |
+           ---------------------------------------
+                    |                 |
+                    v                 v
+               DATABASE           RAZORPAY
+          Users, Menu, Orders,   Checkout, Payment
+          Payments, Events,      Verification,
+          Tokens, Audit Logs     Webhooks, Refunds
+                    |
+          -----------------------
+          |                     |
+          v                     v
+    KITCHEN DASHBOARD      ADMIN DASHBOARD
+    Paid order queue       Menu and staff
+    Preparation            Orders and reports
+    Collection             Payment/refund review
 ```
 
-Open `.env` and set `SECRET_KEY` to a long random string. Never commit `.env`.
+The frontend must not connect directly to the database. The Razorpay secret must remain on the backend and must never be sent to the browser.
 
-Create the database tables:
+## 8. Project Structure
 
-```powershell
-flask --app run db upgrade
-```
-
-## Configuration
-
-Settings come from `.env`. See `.env.example` for the full list.
-
-| Variable | Purpose |
-|---|---|
-| `FLASK_CONFIG` | `development`, `testing`, or `production` |
-| `SECRET_KEY` | Signs sessions. Must be random in production. |
-| `DATABASE_URL` | Defaults to `sqlite:///canteen.db`, stored in `instance/` |
-| `RATELIMIT_STORAGE_URI` | Defaults to `memory://`. Use Redis in production. |
-| `ORDER_PAYMENT_EXPIRY_MINUTES` | Reserved for payments (default 10) |
-| `COLLECTION_TOKEN_EXPIRY_MINUTES` | Reserved for collection QR (default 60) |
-| `RAZORPAY_*` | Reserved for payments. Leave empty for now. |
-
-## Create Accounts
-
-There is no public signup. Create accounts from the command line. You will be asked for a password (at least 8 characters).
-
-```powershell
-flask --app run create-user --name "Test Student" --email student@test.com --role STUDENT
-flask --app run create-user --name "Kitchen Staff" --email kitchen@trayup.test --role KITCHEN
-flask --app run create-user --name "Admin" --email admin@trayup.test --role ADMIN
-```
-
-Emails are stored in lowercase. Duplicate emails are rejected.
-
-## Add Menu Items
-
-The admin menu screen is not built yet. Add items from the Flask shell:
-
-```powershell
-flask --app run shell
-```
-
-```python
-from app.extensions import db
-from app.models.menu import MenuItem
-db.session.add(MenuItem(name="Samosa", category="Snacks", price_paise=1500, is_available=True))
-db.session.commit()
-exit()
-```
-
-Prices are integers in paise. `1500` means ₹15.00.
-
-## Run the Server
-
-```powershell
-python run.py
-```
-
-The server runs at `http://127.0.0.1:5000`.
-
-## Run Tests
-
-```powershell
-python -m pytest -v
-```
-
-Expected result: `27 passed`. Tests use an in-memory database and do not contact Razorpay.
-
-## API
-
-All responses use this format.
-
-Success:
-
-```json
-{ "success": true, "message": "...", "data": { } }
-```
-
-Error:
-
-```json
-{ "success": false, "message": "...", "error": { "code": "..." } }
-```
-
-### Authentication
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| POST | `/api/auth/login` | None | Log in. Rate limit: 5 per minute per IP. |
-| POST | `/api/auth/logout` | Logged in | End the session |
-| GET | `/api/auth/me` | Logged in | Current user |
-
-Login request:
-
-```json
-{ "email": "student@test.com", "password": "your-password" }
-```
-
-Login success (`200`):
-
-```json
-{
-  "success": true,
-  "message": "Logged in successfully",
-  "data": { "id": 1, "name": "Test Student", "email": "student@test.com", "role": "STUDENT" }
-}
-```
-
-Wrong email or password returns `401` with code `INVALID_CREDENTIALS`. The same response is used for unknown emails and disabled accounts, so attackers cannot tell which emails exist.
-
-### Orders
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| POST | `/api/orders` | Logged in as a student | Create an order. Rate limit: 10 per minute per IP. |
-
-Headers:
-
-- `Content-Type: application/json`
-- `Idempotency-Key` (optional, up to 64 characters): send the same key when retrying, and you get back the original order instead of a duplicate.
-
-Request:
-
-```json
-{
-  "items": [
-    { "menu_item_id": 1, "quantity": 2 },
-    { "menu_item_id": 3, "quantity": 1 }
-  ]
-}
-```
-
-Only `menu_item_id` and `quantity` are read. Prices sent by the client are ignored. The server calculates every amount from the database.
-
-Response codes:
-
-| Status | Meaning |
-|---|---|
-| `201` | Order created. The response includes `tracking_token`, which is shown only once. |
-| `200` | Retry with the same `Idempotency-Key`. Returns the original order without a token. |
-| `400` | Invalid JSON, empty order, bad quantity, duplicate item, or bad idempotency key |
-| `401` | Not logged in |
-| `404` | Menu item does not exist |
-| `409` | Item unavailable or not enough stock |
-| `500` | Order could not be saved. Retry. |
-
-Validation limits: 1 to 20 units per item, up to 30 different items per order.
-
-Example success (`201`):
-
-```json
-{
-  "success": true,
-  "message": "Order created successfully",
-  "data": {
-    "id": 1,
-    "order_number": "TU2611210001ABCD",
-    "order_status": "pending_payment",
-    "payment_status": "pending",
-    "subtotal_paise": 3000,
-    "discount_paise": 0,
-    "tax_paise": 0,
-    "total_paise": 3000,
-    "items": [
-      {
-        "menu_item_id": 1,
-        "item_name": "Samosa",
-        "unit_price_paise": 1500,
-        "quantity": 2,
-        "line_total_paise": 3000
-      }
-    ],
-    "created_at": "2026-11-21T09:00:00+00:00",
-    "tracking_token": "random-token-shown-once"
-  }
-}
-```
-
-## Testing the API with Postman
-
-1. Send `POST http://127.0.0.1:5000/api/auth/login` with the JSON body above. Postman keeps the session cookie.
-2. Send `POST http://127.0.0.1:5000/api/orders` with a JSON body and an `Idempotency-Key` header.
-
-## Project Structure
-
-```
+```text
 trayUP/
 ├── app/
-│   ├── __init__.py          App factory, login handling, blueprint registration
-│   ├── config.py            Settings for development, testing, production
-│   ├── extensions.py        db, migrate, limiter, login_manager
-│   ├── cli.py               create-user command
+│   ├── __init__.py
+│   ├── config.py
+│   ├── extensions.py
 │   ├── models/
-│   │   ├── user.py          Accounts and password hashing
-│   │   ├── menu.py          Menu items (prices in paise)
-│   │   ├── order.py         Orders and status constants
-│   │   └── order_item.py    Order line items with price snapshots
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── menu.py
+│   │   ├── order.py
+│   │   ├── order_item.py
+│   │   ├── payment.py
+│   │   ├── webhook.py
+│   │   ├── collection_token.py
+│   │   └── order_status_history.py
 │   ├── routes/
-│   │   ├── auth.py          Login, logout, me
-│   │   └── orders.py        Order creation
-│   └── services/
-│       ├── errors.py        OrderError for user-facing failures
-│       ├── pricing_service.py  Validation and totals
-│       └── order_service.py    Order creation and idempotency
-├── migrations/              Database migrations (commit this folder)
+│   │   ├── public.py
+│   │   ├── orders.py
+│   │   ├── payments.py
+│   │   ├── webhooks.py
+│   │   ├── auth.py
+│   │   ├── kitchen.py
+│   │   └── admin.py
+│   ├── services/
+│   │   ├── pricing_service.py
+│   │   ├── order_service.py
+│   │   ├── payment_service.py
+│   │   ├── inventory_service.py
+│   │   ├── collection_service.py
+│   │   └── report_service.py
+│   ├── security/
+│   │   ├── permissions.py
+│   │   ├── authentication.py
+│   │   └── validation.py
+│   ├── templates/
+│   │   ├── student/
+│   │   ├── kitchen/
+│   │   ├── admin/
+│   │   └── errors/
+│   └── static/
+│       ├── css/
+│       ├── js/
+│       └── images/
+├── migrations/
 ├── tests/
-│   ├── conftest.py          Test app, sample data, logged-in client
-│   ├── test_auth.py
-│   └── test_orders.py
+├── instance/
 ├── .env.example
 ├── .gitignore
-├── pytest.ini
 ├── requirements.txt
 ├── run.py
+├── wsgi.py
 └── README.md
 ```
 
-## Database Changes
+This is the recommended structure and can be adjusted to match the actual implementation.
 
-Edit the models, then:
+## 9. Database Design
 
-```powershell
-flask --app run db migrate -m "describe the change"
-flask --app run db upgrade
+All relationships should use foreign keys and appropriate database constraints. Use database transactions for operations that update multiple related records.
+
+### 9.1 Users
+
+Stores staff and administrator accounts.
+
+| Column | Description |
+|---|---|
+| id | Primary key |
+| name | Staff name |
+| email | Unique login email |
+| password_hash | Secure password hash |
+| role | ADMIN or KITCHEN |
+| is_active | Account status |
+| created_at | Creation timestamp |
+
+### 9.2 Menu_Items
+
+| Column | Description |
+|---|---|
+| id | Primary key |
+| name | Food item name |
+| description | Item description |
+| category | Menu category |
+| price_paise | Price in paise |
+| image_url | Item image |
+| is_available | Current availability |
+| stock_quantity | Optional stock count |
+| created_at | Creation timestamp |
+| updated_at | Last update timestamp |
+
+Use integer paise values instead of floating-point values for monetary calculations.
+
+### 9.3 Orders
+
+| Column | Description |
+|---|---|
+| id | Internal UUID |
+| order_code | Human-readable unique order code |
+| customer_name | Student name |
+| customer_phone | Student contact number |
+| tracking_token_hash | Hash of private tracking token |
+| total_paise | Server-calculated order amount |
+| order_status | Fulfilment status |
+| payment_status | Financial status |
+| special_instructions | Optional instructions |
+| created_at | Order creation timestamp |
+| updated_at | Last update timestamp |
+| ready_at | Time order became ready |
+| collected_at | Time order was collected |
+
+### 9.4 Order_Items
+
+Stores the items belonging to an order.
+
+| Column | Description |
+|---|---|
+| id | Primary key |
+| order_id | Foreign key to Orders |
+| menu_item_id | Foreign key to Menu_Items |
+| item_name_snapshot | Name at purchase time |
+| unit_price_paise | Price at purchase time |
+| quantity | Ordered quantity |
+| line_total_paise | Quantity multiplied by unit price |
+
+Snapshots preserve historical receipts when menu names or prices change.
+
+### 9.5 Payments
+
+An order can have multiple payment attempts. Store each attempt separately.
+
+| Column | Description |
+|---|---|
+| id | Primary key |
+| order_id | Related internal order |
+| gateway | Payment provider |
+| gateway_order_id | Razorpay order ID |
+| gateway_payment_id | Razorpay payment ID |
+| amount_paise | Expected payment amount |
+| currency | Normally INR |
+| status | Payment attempt state |
+| signature_verified_at | Verification timestamp |
+| captured_at | Capture timestamp |
+| refund_id | Gateway refund ID |
+| created_at | Creation timestamp |
+
+### 9.6 Webhook_Events
+
+| Column | Description |
+|---|---|
+| id | Primary key |
+| gateway_event_id | Unique Razorpay event ID |
+| event_type | Event name |
+| payload_hash | Hash for event audit |
+| processing_status | Processing result |
+| received_at | Receipt timestamp |
+| processed_at | Processing timestamp |
+
+The unique event ID helps prevent duplicate webhook processing.
+
+### 9.7 Collection_Tokens
+
+| Column | Description |
+|---|---|
+| id | Primary key |
+| order_id | Related order |
+| token_hash | Hash of random collection token |
+| issued_at | Issue timestamp |
+| expires_at | Expiry timestamp |
+| used_at | Consumption timestamp |
+
+### 9.8 Order_Status_History
+
+Stores each status transition, including the previous status, new status, staff account, and timestamp.
+
+## 10. Order and Payment Statuses
+
+Order fulfilment and payment must be tracked independently.
+
+### Order Status
+
+| Status | Meaning |
+|---|---|
+| PENDING_PAYMENT | Waiting for successful payment confirmation |
+| RECEIVED | Payment captured; order accepted for kitchen processing |
+| PREPARING | Kitchen is preparing the order |
+| READY | Order is ready for collection |
+| COLLECTED | Food has been handed over |
+| CANCELLED | Order will not be fulfilled |
+
+### Payment Status
+
+| Status | Meaning |
+|---|---|
+| UNPAID | No captured payment |
+| PAID | Payment captured and confirmed |
+| REFUND_PENDING | Refund request initiated |
+| REFUNDED | Refund confirmed |
+
+Individual payment attempts should additionally record gateway states such as CREATED, AUTHORIZED, CAPTURED, and FAILED.
+
+Never mark an order as paid merely because the browser reports a successful Checkout callback. Confirm the payment through trusted backend verification and gateway state.
+
+## 11. API Overview
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| GET | /api/menu | Public | List available menu items |
+| GET | /api/canteen/status | Public | Get canteen ordering status |
+| POST | /api/orders | Public | Create an order |
+| GET | /api/orders/{id} | Tracking token | Get order details and status |
+| POST | /api/orders/{id}/payment-order | Order owner | Create Razorpay order |
+| POST | /api/payments/verify | Payment flow | Verify Checkout response |
+| POST | /api/payments/webhook | Razorpay | Receive gateway events |
+| POST | /api/auth/login | Staff | Staff login |
+| POST | /api/auth/logout | Staff | Staff logout |
+| GET | /api/staff/orders | Kitchen/Admin | Fetch active kitchen orders |
+| PATCH | /api/staff/orders/{id}/status | Kitchen/Admin | Update preparation status |
+| POST | /api/staff/collection/preview | Kitchen/Admin | Validate scanned token |
+| POST | /api/staff/collection/confirm | Kitchen/Admin | Confirm handover |
+| GET | /api/admin/menu | Admin | List all menu items |
+| POST | /api/admin/menu | Admin | Create menu item |
+| PATCH | /api/admin/menu/{id} | Admin | Update menu item |
+| GET | /api/admin/orders | Admin | Search and view orders |
+| GET | /api/admin/reports | Admin | View reports |
+| POST | /api/admin/staff | Admin | Create staff account |
+| PATCH | /api/admin/staff/{id} | Admin | Update or disable staff account |
+
+Student order tracking must require a private token or another appropriate ownership mechanism. A guessable order ID must not grant access to personal order information.
+
+## 12. Payment Integration
+
+### 12.1 Payment Provider
+
+trayUP is planned to use Razorpay Standard Checkout.
+
+Use Razorpay Test Mode during development. Test transactions do not transfer real money.
+
+Live payments require appropriate merchant onboarding, verification, activation, and settlement configuration. The canteen or authorized institution should own or explicitly authorize the merchant account and settlement arrangement.
+
+Do not assume that a payment gateway is permanently free. Check current Razorpay pricing, offer eligibility, applicable taxes, payment-method exclusions, and account-specific terms before going live.
+
+Official references:
+
+- [Razorpay Documentation](https://razorpay.com/docs/)
+- [Razorpay Orders API](https://razorpay.com/docs/api/orders/)
+- [Payment Signature Verification](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/validate-signature/)
+- [Razorpay Webhooks](https://razorpay.com/docs/webhooks/)
+- [Razorpay Pricing](https://razorpay.com/pricing/)
+
+### 12.2 Secure Payment Creation
+
+The frontend sends item IDs and quantities to the backend. It must not determine the payment amount.
+
+The backend:
+
+1. Retrieves the internal order.
+2. Validates the trusted stored amount.
+3. Creates a Razorpay order in INR.
+4. Sends the amount as integer paise.
+5. Stores the Razorpay order ID against the correct internal payment attempt.
+6. Returns only the public Checkout information required by the browser.
+
+Example:
+
+```python
+amount_paise = 13000  # ₹130.00
+
+razorpay_order = client.order.create({
+    "amount": amount_paise,
+    "currency": "INR",
+    "receipt": order.order_code
+})
 ```
 
-Review the generated file in `migrations/versions/` before upgrading. Commit the migration file with your code.
+### 12.3 Signature Verification
 
-## Security Rules
+After Checkout, the backend must verify the payment signature using the expected Razorpay order ID, payment ID, and secret key.
 
-- Never trust prices, totals, or payment status sent by the frontend.
-- Store only hashes of tracking and collection tokens.
-- Keep `.env`, database files, and API secrets out of Git.
-- Students may only see their own orders.
-- Unpaid orders must never reach the kitchen.
-- A collection token must work exactly once.
+The backend must also ensure that:
 
-## Team Notes
+- The payment belongs to the correct internal order.
+- The expected amount matches.
+- The currency matches.
+- The payment is actually captured before kitchen fulfilment.
 
-- Shared files (`app/__init__.py`, `app/config.py`, `app/extensions.py`, and the User and Menu models) should be reviewed by Nehal before changes are merged.
-- Development branch: `backend-operations`. Open a pull request into `main`.
+Never expose the Razorpay Key Secret in frontend JavaScript, HTML, or public repositories.
 
-## Next Steps
+### 12.4 Webhook Processing
 
-1. Razorpay Test Mode: create order, verify signature, webhook (mocked in tests)
-2. Kitchen queue and status transitions
-3. Collection QR generation and single-use verification
-4. Inventory reservation with atomic stock updates
-5. Admin reports and refunds
+The webhook endpoint must:
+
+- Validate the webhook signature against the raw request body.
+- Use the configured webhook secret.
+- Record the unique event ID.
+- Process each event idempotently.
+- Handle duplicate and out-of-order events.
+- Verify that the payment maps to the expected internal order and amount.
+- Avoid allowing stale events to reverse a confirmed captured payment.
+
+The webhook is important when the student closes the browser or loses connectivity after completing payment.
+
+### 12.5 Refunds
+
+If an order cannot be fulfilled after payment:
+
+1. Record the cancellation reason.
+2. Prevent kitchen fulfilment.
+3. Initiate the refund through the gateway.
+4. Store the refund identifier.
+5. Track the refund state.
+6. Mark the payment REFUNDED only after confirmation.
+
+## 13. QR Code and Collection Security
+
+There are two distinct QR use cases.
+
+### Canteen Entry QR
+
+A static QR code opens the public menu:
+
+```text
+https://your-domain.example/menu
+```
+
+It does not contain payment details, student information, or private secrets.
+
+### Order Collection QR
+
+A separate random, high-entropy token is generated for an order. Store only its hash in the database and display the raw token in the student's private order page.
+
+The backend must verify:
+
+- The token exists.
+- The token has not expired.
+- The token has not already been used.
+- The related order is paid.
+- The related order is READY.
+- The token belongs to that order.
+
+After staff confirm the handover, consume the token and mark the order COLLECTED in one database transaction. A second collection attempt must fail.
+
+Scanning alone should not automatically mark an order as collected. Staff should review the order and explicitly confirm handover.
+
+## 14. Inventory and Failure Handling
+
+Start with item-level availability and optional stock quantities.
+
+For stock-controlled items:
+
+1. Check stock when the order is created.
+2. Reserve the required quantity using a database transaction.
+3. Apply a defined payment expiry window.
+4. Convert the reservation into a sale after confirmed payment.
+5. Release the reservation after a definitive failed or expired payment.
+6. Reconcile ambiguous payment outcomes before releasing stock.
+
+Do not release stock simply because the browser closed or a Checkout callback was missed. A delayed webhook may still confirm payment.
+
+For simultaneous orders, use database transactions and appropriate row locking or atomic conditional updates so stock cannot become negative.
+
+Ingredient-level inventory can be added later.
+
+## 15. Security Requirements
+
+- Use HTTPS in production.
+- Store secrets in environment variables or the hosting provider's secret manager.
+- Keep .env out of version control.
+- Hash staff passwords using a secure password-hashing algorithm.
+- Use secure session cookies.
+- Enable CSRF protection for session-authenticated state-changing requests.
+- Apply rate limits to login, order creation, payment, and token verification endpoints.
+- Enforce role-based authorization on every staff and admin endpoint.
+- Never trust frontend prices, totals, roles, or payment status.
+- Validate all input on the backend.
+- Use ORM parameterization and database constraints.
+- Verify Razorpay Checkout signatures and webhook signatures.
+- Process webhooks idempotently.
+- Use unpredictable, expiring, one-time collection tokens.
+- Prevent duplicate collection with atomic state transitions.
+- Avoid exposing personal information through public order identifiers.
+- Limit uploaded file types and sizes.
+- Keep audit records for staff actions and important order transitions.
+- Do not log passwords, secrets, or unnecessary sensitive payment data.
+- Back up the production database and test restoration.
+
+## 16. Real-Time Updates and Notifications
+
+### Initial Release
+
+Use short-interval polling, approximately every 3–5 seconds, for:
+
+- Kitchen order queue updates.
+- Student order status updates.
+
+Polling is simpler to deploy and maintain for an initial prototype.
+
+### Later Enhancement
+
+Add WebSockets when needed to push:
+
+- New paid orders to the kitchen.
+- Preparation status changes to students.
+- Ready-for-collection notifications.
+
+Start with in-website updates. Push notifications, SMS, and email can be added later if their service costs and operational requirements are acceptable.
+
+## 17. Local Development Setup
+
+### Requirements
+
+- Python 3.10 or newer.
+- Git.
+- A code editor.
+- A Razorpay account for Test Mode credentials.
+
+### 17.1 Clone the Repository
+
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd trayUP
+```
+
+### 17.2 Create a Virtual Environment
+
+Windows:
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+macOS / Linux:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 17.3 Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 17.4 Configure Environment Variables
+
+Copy .env.example to .env and fill in the local values.
+
+Do not commit .env to Git.
+
+### 17.5 Initialize the Database
+
+If Flask-Migrate is configured:
+
+```bash
+flask db upgrade
+```
+
+Use the project's documented CLI command to create the first administrator account. Do not add a public admin-registration route.
+
+### 17.6 Run the Development Server
+
+```bash
+python run.py
+```
+
+Open the local address printed by Flask, commonly:
+
+```text
+http://127.0.0.1:5000
+```
+
+The exact commands may need adjustment to match the application's Flask configuration and entry point.
+
+## 18. Environment Variables
+
+Example .env.example:
+
+```dotenv
+FLASK_ENV=development
+SECRET_KEY=replace-with-a-long-random-secret
+DATABASE_URL=sqlite:///canteen.db
+
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+
+ORDER_PAYMENT_EXPIRY_MINUTES=10
+COLLECTION_TOKEN_EXPIRY_MINUTES=60
+
+PUBLIC_BASE_URL=http://127.0.0.1:5000
+```
+
+Notes:
+
+- Use a strong, randomly generated SECRET_KEY.
+- Keep Razorpay credentials empty until configured.
+- Use Test Mode keys for development.
+- Use separate Live Mode credentials for production.
+- Never commit real secrets to GitHub.
+- Use PostgreSQL's connection URL for production.
+- Configure production cookie security and HTTPS settings separately.
+
+## 19. Testing
+
+Use pytest for backend tests and browser-based testing for the user interfaces.
+
+### Student Ordering Tests
+
+- Menu loads correctly.
+- Available items can be added to the cart.
+- Quantities update correctly.
+- Unavailable items cannot be ordered.
+- Invalid quantities are rejected.
+- Frontend price manipulation does not change the backend total.
+- Duplicate order submissions are handled safely.
+
+### Payment Tests
+
+- Successful Test Mode payment.
+- Failed payment.
+- Invalid Checkout signature.
+- Incorrect amount.
+- Incorrect currency.
+- Payment mapped to the wrong order.
+- Duplicate webhook delivery.
+- Out-of-order webhook delivery.
+- Browser closes after payment.
+- Refund initiation and confirmation.
+
+### Kitchen Tests
+
+- Staff login and logout.
+- Inactive staff cannot log in.
+- Unauthorized users cannot access kitchen routes.
+- Only paid orders enter the kitchen queue.
+- Invalid status transitions are rejected.
+- Status changes are recorded in history.
+
+### Collection Tests
+
+- Valid collection QR.
+- Invalid token.
+- Expired token.
+- Reused token.
+- Token belonging to another order.
+- Unpaid order cannot be collected.
+- Non-ready order cannot be collected.
+- Concurrent collection attempts cannot collect the same order twice.
+
+### Admin Tests
+
+- Menu creation and updates.
+- Availability changes.
+- Staff creation and disabling.
+- Order search.
+- Sales calculations.
+- Refund reporting.
+- Role restrictions.
+
+### Device and Network Testing
+
+Test on Android, iOS, tablet, and desktop browsers. Test slow connections, lost connectivity, repeated taps, page refreshes, and browser closure during checkout.
+
+## 20. Deployment Plan
+
+### Before Deployment
+
+- Use PostgreSQL for production.
+- Apply database migrations.
+- Configure HTTPS.
+- Configure production environment variables.
+- Set secure session-cookie options.
+- Configure Razorpay Live Mode only after merchant activation and authorization.
+- Register and verify the production webhook URL.
+- Create administrator and kitchen accounts.
+- Add the actual canteen menu and prices.
+- Test order, payment, kitchen, and collection flows.
+- Configure database backups and logging.
+
+### Zero-Budget Development Approach
+
+| Component | Initial Approach |
+|---|---|
+| Coding and testing | Local machine |
+| Frontend | Served by Flask |
+| Backend | Flask |
+| Local database | SQLite |
+| Payment development | Razorpay Test Mode |
+| QR generation | Local Python library |
+| Notifications | In-app updates |
+| Order updates | Polling |
+| Public demo | Free hosting tier, if suitable |
+
+Free hosting plans may have sleep limits, storage limits, request limits, or non-persistent filesystems. Do not assume a free plan is suitable for real transactional canteen operations. Verify the provider's current terms and use persistent production storage.
+
+## 21. Development Roadmap
+
+Build in this order so later modules depend on stable earlier modules.
+
+| Phase | Work | Completion Condition |
+|---|---|---|
+| 1 | Flask foundation and database | Application starts and migrations work |
+| 2 | Database models and admin menu | Admin can manage menu and availability |
+| 3 | Student menu and cart | Student can build an order on mobile |
+| 4 | Order and pricing engine | Backend calculates trusted totals |
+| 5 | Razorpay integration | Captured payment is verified and recorded |
+| 6 | Kitchen dashboard | Paid orders appear and statuses update |
+| 7 | Tracking and collection QR | Valid orders can be collected exactly once |
+| 8 | Inventory and reports | Stock and sales records are consistent |
+| 9 | Security and testing | Critical workflow and abuse tests pass |
+| 10 | Deployment and pilot | Production setup is verified with canteen staff |
+
+### First-Release Scope
+
+Prioritize:
+
+- QR-based menu access.
+- Menu and availability management.
+- Guest ordering.
+- Server-side pricing.
+- Razorpay Test Mode integration.
+- Payment verification and webhooks.
+- Kitchen order queue.
+- Student order tracking.
+- Collection QR verification.
+- Basic admin reports.
+- Security and automated tests.
+
+Defer student accounts, loyalty points, coupons, college ID integration, multi-canteen support, advanced inventory, AI recommendations, and native mobile applications.
+
+## 22. Success Metrics
+
+Track these metrics after the pilot:
+
+- Orders per day.
+- Average order value.
+- Payment success rate.
+- Average preparation time.
+- Order completion rate.
+- Cancellation and refund rate.
+- Average kitchen processing time.
+- Peak ordering periods.
+- Most frequently ordered items.
+- Student feedback and repeat order rate.
+
+A payment success target above 95% and an average preparation target below 10 minutes can be used as initial goals, but actual performance depends on the canteen, payment methods, menu, and operating conditions.
+
+## 23. Future Enhancements
+
+Possible improvements after the first release:
+
+- Student accounts and order history.
+- College ID integration.
+- Scheduled pre-orders and pickup time slots.
+- Loyalty points and discounts.
+- Feedback and ratings.
+- Ingredient-level inventory.
+- Multiple canteen support.
+- Multi-language interface.
+- Advanced analytics.
+- Push notifications.
+- WebSocket-based live updates.
+- Offline-friendly menu access.
+
+Only add enhancements after the core order-to-payment-to-collection workflow is reliable.
+
+## 24. Contribution Guidelines
+
+Contributions should preserve payment integrity, order correctness, and role separation.
+
+1. Create a feature branch.
+2. Keep changes focused.
+3. Do not commit .env, credentials, or production data.
+4. Add or update tests for changed behavior.
+5. Run the test suite before opening a pull request.
+6. Document new environment variables and API behavior.
+7. Never bypass payment verification or collection checks for convenience.
+
+Suggested branch names:
+
+```text
+feature/student-menu
+feature/order-management
+feature/razorpay-integration
+feature/kitchen-dashboard
+feature/collection-qr
+fix/payment-webhook
+```
+
+## 25. License
+
+No license has been selected yet. Add a license file and update this section once the project owner has chosen the terms under which the source code may be used, modified, and distributed.
+
+---
+
+**trayUP — Scan. Order. Pay. Pick up.**
