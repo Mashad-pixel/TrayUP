@@ -893,34 +893,4 @@ Possible improvements after the first release:
 - Offline-friendly menu access.
 
 Only add enhancements after the core order-to-payment-to-collection workflow is reliable.
-
-## 24. Contribution Guidelines
-
-Contributions should preserve payment integrity, order correctness, and role separation.
-
-1. Create a feature branch.
-2. Keep changes focused.
-3. Do not commit .env, credentials, or production data.
-4. Add or update tests for changed behavior.
-5. Run the test suite before opening a pull request.
-6. Document new environment variables and API behavior.
-7. Never bypass payment verification or collection checks for convenience.
-
-Suggested branch names:
-
-```text
-feature/student-menu
-feature/order-management
-feature/razorpay-integration
-feature/kitchen-dashboard
-feature/collection-qr
-fix/payment-webhook
-```
-
-## 25. License
-
-No license has been selected yet. Add a license file and update this section once the project owner has chosen the terms under which the source code may be used, modified, and distributed.
-
----
-
-**trayUP — Scan. Order. Pay. Pick up.**
+-------------------------
