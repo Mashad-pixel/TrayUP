@@ -892,3 +892,33 @@ Possible improvements after the first release:
 
 Only add enhancements after the core order-to-payment-to-collection workflow is reliable.
 -------------------------
+
+
+## Integrated Part 1 foundation endpoints
+
+The backend now exposes the compatible foundation endpoints alongside the order, payment,
+kitchen, collection, refund, and reporting workflows:
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| GET | `/api/health` | Public | Database health check |
+| GET | `/api/csrf-token` | Public | Obtain the token required on state-changing browser requests |
+| GET | `/api/menu` | Public | Return available, in-stock menu items without internal stock counters |
+| GET | `/api/canteen/status` | Public | Read the canteen's order-acceptance state |
+| GET | `/api/admin/menu` | Admin | View menu items, stock and reservations |
+| POST | `/api/admin/menu` | Admin | Create a menu item |
+| PATCH | `/api/admin/menu/<id>` | Admin | Update menu details and availability |
+| PATCH | `/api/admin/canteen/status` | Admin | Open or close ordering |
+
+Browser clients must fetch `/api/csrf-token` and send the returned value in the
+`X-CSRFToken` header for POST, PATCH, and DELETE requests. The Razorpay webhook is
+exempt from browser CSRF checks and remains protected by Razorpay signature verification.
+
+The canteen defaults to open until an administrator closes it. New order creation is rejected
+with `CANTEEN_CLOSED` while closed. Reopening the canteen allows new orders again.
+
+The uploaded Part 1 package used a different UUID-based guest-order schema. Its order,
+collection-token, authentication and migration files were not copied over the current app,
+because the existing payments, refunds and kitchen workflows depend on the repository's
+integer order IDs and student ownership model. Guest checkout remains a separate integration
+task; this commit preserves the currently working authenticated-order/payment architecture.
