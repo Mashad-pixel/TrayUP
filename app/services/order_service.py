@@ -1,20 +1,27 @@
 import hashlib
 import secrets
-from datetime import datetime, timezone
+from datetime import timedelta
 
+from flask import current_app
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_item import OrderItem
+from app.models.order_status_history import OrderStatusHistory
+from app.models.payment import Payment, PaymentRecordStatus
+from app.services.collection_service import expire_collection_tokens
 from app.services.errors import OrderError
+from app.services.inventory_service import release_reservations, reserve_stock, return_sold_stock
 from app.services.pricing_service import normalize_requested_items, price_order
+from app.services.time_utils import as_utc, utcnow
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 64
+EXPIRY_NOTE = "Payment not completed in time"
 
 
 def _generate_order_number():
-    stamp = datetime.now(timezone.utc).strftime("%y%m%d")
+    stamp = utcnow().strftime("%y%m%d")
     return f"TU{stamp}{secrets.token_hex(4).upper()}"
 
 
@@ -39,12 +46,79 @@ def _find_existing_order(student_id, key):
     return Order.query.filter_by(student_id=student_id, idempotency_key=key).first()
 
 
-def create_order(student_id, raw_items, idempotency_key=None):
-    """Create a pending_payment order.
+def payment_window_closed(order, now=None):
+    """True once an unpaid order has waited longer than ORDER_PAYMENT_EXPIRY_MINUTES."""
+    now = now or utcnow()
+    minutes = current_app.config["ORDER_PAYMENT_EXPIRY_MINUTES"]
+    return as_utc(order.created_at) <= now - timedelta(minutes=minutes)
 
-    Returns (order, raw_tracking_token).
-    raw_tracking_token is None when an existing order is returned for a retried key,
-    because the raw token was already shown to the student the first time.
+
+def expire_order(order, now=None):
+    """Cancel one unpaid order and free its held stock. The caller must commit."""
+    now = now or utcnow()
+    previous_status = order.order_status
+
+    order.order_status = OrderStatus.CANCELLED
+    order.payment_status = PaymentStatus.FAILED
+    release_reservations(order.id)
+
+    db.session.add(OrderStatusHistory(
+        order_id=order.id,
+        previous_status=previous_status,
+        new_status=OrderStatus.CANCELLED,
+        changed_by=None,  # System change, not a staff member
+        changed_at=now,
+        notes=EXPIRY_NOTE,
+    ))
+
+
+def expire_unpaid_orders():
+    """Cancel every unpaid order whose payment window has closed. Returns how many.
+
+    Paid orders are never touched. Runs lazily before each new order, and from the
+    `expire-orders` CLI command. The whole sweep is one transaction, so a failure
+    changes nothing.
+    """
+    now = utcnow()
+    candidates = (
+        Order.query.filter(
+            Order.order_status == OrderStatus.PENDING_PAYMENT,
+            Order.payment_status == PaymentStatus.PENDING,
+        )
+        .with_for_update()
+        .all()
+    )
+
+    try:
+        expired = 0
+        for order in candidates:
+            if payment_window_closed(order, now):
+                expire_order(order, now)
+                expired += 1
+        db.session.commit()
+        return expired
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+def _sweep_expired_orders_safely():
+    """Free stock held by expired orders before a new order is priced.
+
+    If the sweep fails, students can still order. Their order may just see less
+    free stock until the next sweep. The failure is logged.
+    """
+    try:
+        expire_unpaid_orders()
+    except Exception:
+        current_app.logger.exception("Could not expire unpaid orders before creating a new order.")
+
+
+def create_order(student_id, raw_items, idempotency_key=None):
+    """Create a pending_payment order and reserve its stock in one transaction.
+
+    Returns (order, raw_tracking_token). raw_tracking_token is None when an existing
+    order is returned for a retried key, because the raw token was shown the first time.
     """
     key = _validate_idempotency_key(idempotency_key)
 
@@ -54,8 +128,10 @@ def create_order(student_id, raw_items, idempotency_key=None):
             return existing, None
 
     requested = normalize_requested_items(raw_items)
-    priced = price_order(requested)
 
+    _sweep_expired_orders_safely()
+
+    priced = price_order(requested)
     raw_token = secrets.token_urlsafe(32)
 
     order = Order(
@@ -82,9 +158,10 @@ def create_order(student_id, raw_items, idempotency_key=None):
             )
         )
 
-    db.session.add(order)
-
     try:
+        db.session.add(order)
+        db.session.flush()  # Assigns order.id, which the stock reservations need.
+        reserve_stock(order.id, priced.lines)
         db.session.commit()
     except IntegrityError:
         # A parallel request with the same key may have won the race.
@@ -99,7 +176,66 @@ def create_order(student_id, raw_items, idempotency_key=None):
             500,
         )
     except Exception:
+        # Also covers OrderError from reserve_stock. The order and any partial holds are rolled back.
         db.session.rollback()
         raise
 
     return order, raw_token
+
+
+def cancel_order(order_id, staff_user_id, reason):
+    """Admin cancels an order. Returns (order, refund_required).
+
+    Unpaid orders free their held stock. Paid orders get their sold stock back, and
+    their money is flagged REFUND_REQUIRED until an admin refunds it. In both cases
+    the collection code stops working immediately.
+    """
+    try:
+        order = Order.query.filter_by(id=order_id).with_for_update().first()
+        if order is None:
+            raise OrderError("ORDER_NOT_FOUND", "Order not found.", 404)
+
+        if order.order_status == OrderStatus.COLLECTED:
+            raise OrderError(
+                "ORDER_ALREADY_COLLECTED",
+                "This order has already been collected and cannot be cancelled.",
+                409,
+            )
+        if order.order_status == OrderStatus.CANCELLED:
+            raise OrderError("ALREADY_CANCELLED", "This order is already cancelled.", 409)
+
+        now = utcnow()
+        previous_status = order.order_status
+
+        release_reservations(order.id)
+        return_sold_stock(order.id)
+        expire_collection_tokens(order.id, now)
+
+        captured_payments = Payment.query.filter(
+            Payment.order_id == order.id,
+            Payment.status.in_([PaymentRecordStatus.PAID, PaymentRecordStatus.PARTIALLY_REFUNDED]),
+        ).all()
+        for payment in captured_payments:
+            payment.status = PaymentRecordStatus.REFUND_REQUIRED
+        refund_required = bool(captured_payments)
+
+        # Paid and partly refunded orders keep their payment status. Only unpaid orders change.
+        if order.payment_status == PaymentStatus.PENDING:
+            order.payment_status = PaymentStatus.FAILED
+
+        order.order_status = OrderStatus.CANCELLED
+        db.session.add(OrderStatusHistory(
+            order_id=order.id,
+            previous_status=previous_status,
+            new_status=OrderStatus.CANCELLED,
+            changed_by=staff_user_id,
+            changed_at=now,
+            notes=reason,
+        ))
+
+        db.session.commit()
+        return order, refund_required
+
+    except Exception:
+        db.session.rollback()
+        raise
