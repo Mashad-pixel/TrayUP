@@ -11,6 +11,7 @@ from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment, PaymentRecordStatus
 from app.services.collection_service import expire_collection_tokens
+from app.services.canteen_service import is_accepting_orders
 from app.services.errors import OrderError
 from app.services.inventory_service import release_reservations, reserve_stock, return_sold_stock
 from app.services.pricing_service import normalize_requested_items, price_order
@@ -128,6 +129,13 @@ def create_order(student_id, raw_items, idempotency_key=None):
             return existing, None
 
     requested = normalize_requested_items(raw_items)
+
+    if not is_accepting_orders():
+        raise OrderError(
+            "CANTEEN_CLOSED",
+            "The canteen is not accepting new orders right now.",
+            409,
+        )
 
     _sweep_expired_orders_safely()
 

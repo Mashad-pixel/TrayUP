@@ -3,7 +3,7 @@ import json
 from flask import Blueprint, current_app, request
 from flask_login import current_user, login_required
 
-from app.extensions import limiter
+from app.extensions import csrf, limiter
 from app.responses import error_response, success_response
 from app.services.errors import OrderError
 from app.services.payment_service import (
@@ -93,6 +93,7 @@ def verify_payment_route():
 
 
 @payments_bp.route("/webhook", methods=["POST"])
+@csrf.exempt
 def razorpay_webhook():
     # Read the raw bytes first. The signature is calculated over exactly these bytes.
     raw_body = request.get_data(cache=False)

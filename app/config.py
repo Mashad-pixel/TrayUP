@@ -41,6 +41,8 @@ class DevelopmentConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
+    # Existing API tests remain focused; CSRF is explicitly enabled in security tests.
+    WTF_CSRF_ENABLED = False
     SECRET_KEY = "test-secret-key"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     RATELIMIT_ENABLED = False

@@ -1,15 +1,20 @@
 from flask import Flask, jsonify
+from flask_wtf.csrf import CSRFError
+
+from app.responses import error_response
 
 from app.cli import register_cli
 from app.config import DEV_SECRET_KEY, config_map
-from app.extensions import db, limiter, login_manager, migrate
+from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.models.user import User
+from app.routes.admin import admin_bp
 from app.routes.admin_orders import admin_orders_bp
 from app.routes.admin_refunds import admin_refunds_bp
 from app.routes.auth import auth_bp
 from app.routes.kitchen import kitchen_bp
 from app.routes.orders import orders_bp
 from app.routes.payments import payments_bp
+from app.routes.public import public_bp
 from app.routes.reports import reports_bp
 
 
@@ -50,9 +55,28 @@ def create_app(config_name="development"):
 
     db.init_app(app)
     migrate.init_app(app, db)
+    csrf.init_app(app)
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(exc):
+        return error_response(
+            "CSRF_TOKEN_INVALID",
+            "The CSRF token is missing or invalid. Refresh the token and retry.",
+            400,
+        )
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Cache-Control", "no-store")
+        return response
     limiter.init_app(app)
     login_manager.init_app(app)
 
+    app.register_blueprint(public_bp)
+    app.register_blueprint(admin_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(admin_orders_bp)
