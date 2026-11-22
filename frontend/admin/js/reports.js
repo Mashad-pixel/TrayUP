@@ -1,0 +1,8 @@
+(function () {
+ const content=document.querySelector(".admin-content");
+ content.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><h1 class="admin-title">Reports</h1><div><input type="date" id="from-date" style="height:42px;border:1px solid var(--line);border-radius:6px;padding:8px"> <input type="date" id="to-date" style="height:42px;border:1px solid var(--line);border-radius:6px;padding:8px"> <button class="btn btn-primary" id="export-csv">Export CSV</button></div></div><div class="admin-stats" style="grid-template-columns:repeat(3,1fr)"><div class="admin-card"><span>Total orders</span><div class="value" id="report-orders">148</div></div><div class="admin-card"><span>Revenue</span><div class="value" id="report-revenue">₹18,450</div></div><div class="admin-card"><span>Average order</span><div class="value">₹124.66</div></div></div><div class="card table-card"><table class="data-table"><thead><tr><th>Date</th><th>Orders</th><th>Revenue</th></tr></thead><tbody><tr><td>2026-11-21</td><td>24</td><td>₹18,450</td></tr><tr><td>2026-11-20</td><td>31</td><td>₹22,680</td></tr></tbody></table></div><p style="margin-top:10px;color:var(--muted);font-size:12px">Demo report data · replace with backend reporting response</p>`;
+ document.getElementById("export-csv").addEventListener("click",()=>{
+  const csv="Date,Orders,Revenue\n2026-11-21,24,18450\n2026-11-20,31,22680";
+  const link=document.createElement("a");link.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));link.download="trayup-report.csv";link.click();URL.revokeObjectURL(link.href);
+ });
+})();

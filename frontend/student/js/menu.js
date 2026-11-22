@@ -1,0 +1,416 @@
+(function () {
+  const categories = ["All", "Breakfast", "Lunch", "Snacks", "Drinks", "Popular"];
+
+  const header = document.getElementById("app-header");
+  const grid = document.getElementById("food-grid");
+  const drawer = document.getElementById("cart-drawer");
+  const popularPeriods = document.getElementById("popular-periods");
+  const heroTrack = document.getElementById("hero-track");
+  const heroCount = document.getElementById("hero-slide-count");
+  const heroCarousel = document.querySelector(".menu-hero");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const heroTransitionDuration = 700;
+  let activeCategory = "Popular";
+  let activePeriod = "day";
+  let heroProducts = [];
+  let heroIndex = 0;
+  let heroTimer = null;
+  let heroTransitionTimer = null;
+  let queuedHeroDirections = [];
+  let heroPaused = reducedMotion.matches;
+  let heroTransitioning = false;
+  let heroDirection = 1;
+  let catalog = window.trayDemoData.products;
+  const searchParams = new URLSearchParams(window.location.search);
+  const requestedCategory = searchParams.get("category");
+  if (categories.includes(requestedCategory)) activeCategory = requestedCategory;
+  const initialSearch = searchParams.get("search");
+  if (initialSearch) activeCategory = "All";
+  header.innerHTML = trayComponents.header(activeCategory);
+  const searchInput = document.querySelector(".search input");
+  if (initialSearch) searchInput.value = initialSearch;
+
+  function rupees(value) {
+    return `₹${Number(value).toLocaleString("en-IN")}`;
+  }
+
+  function normalizeSearch(value) {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  }
+
+  function searchScore(item, rawQuery) {
+    const query = normalizeSearch(rawQuery);
+    if (!query) return 1;
+
+    const name = normalizeSearch(item.name);
+    const category = normalizeSearch(item.category);
+    const description = normalizeSearch(item.description);
+    const searchable = `${name} ${category} ${description}`;
+    const queryWords = query.split(" ").filter(Boolean);
+
+    if (name === query) return 100;
+    if (name.startsWith(query)) return 90;
+    if (name.includes(query)) return 80;
+    if (category === query) return 70;
+    if (category.includes(query)) return 60;
+
+    let score = 0;
+    queryWords.forEach((word) => {
+      if (word.length < 2) return;
+      if (name.includes(word)) score += 35;
+      else if (category.includes(word)) score += 25;
+      else if (description.includes(word)) score += 15;
+      else if (searchable.includes(word)) score += 5;
+    });
+
+    return score;
+  }
+
+  function getPopularCounts(period) {
+    const now = new Date();
+    const start = new Date(now);
+    if (period === "day") start.setHours(0, 0, 0, 0);
+    else start.setDate(now.getDate() - (period === "week" ? 7 : 30));
+
+    const counts = new Map();
+    window.trayDemoData.getOrderActivity().forEach((sale) => {
+      const orderedAt = new Date(sale.orderedAt);
+      if (Number.isNaN(orderedAt.getTime()) || orderedAt < start || orderedAt > now) return;
+      counts.set(sale.productId, (counts.get(sale.productId) || 0) + sale.quantity);
+    });
+    return counts;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    })[character]);
+  }
+
+  function heroSlideMarkup(item) {
+    return `
+      <a class="hero-slide" href="./student/product.html?id=${encodeURIComponent(item.id)}"
+        aria-label="Order ${escapeHtml(item.name)} for ${rupees(item.price)}. ${escapeHtml(item.description)}"
+        aria-hidden="true" tabindex="-1" inert>
+        <img class="hero-slide-image" src="${escapeHtml(item.image)}" alt="" loading="eager">
+        <div class="hero-copy">
+          <div class="open-status">Canteen open · 8:00 AM–6:00 PM</div>
+          <span class="hero-category">${escapeHtml(item.category)} · Popular pick</span>
+          <h1>${escapeHtml(item.name)}</h1>
+          <p>${escapeHtml(item.description)}</p>
+          <div class="hero-slide-footer">
+            <span class="hero-slide-price">${rupees(item.price)}</span>
+            <span class="hero-slide-cta">View dish &amp; order <span aria-hidden="true">→</span></span>
+          </div>
+        </div>
+      </a>
+    `;
+  }
+
+  function renderHero() {
+    const counts = getPopularCounts("day");
+    heroProducts = catalog
+      .filter((item) => item.isPopular && item.isAvailable)
+      .map((item) => ({ item, count: counts.get(item.id) || 0 }))
+      .sort((a, b) => b.count - a.count || b.item.rating - a.item.rating)
+      .map(({ item }) => item);
+
+    if (!heroProducts.length) {
+      heroCarousel.hidden = true;
+      return;
+    }
+
+    heroCarousel.hidden = false;
+    heroIndex = 0;
+    heroTrack.innerHTML = heroSlideMarkup(heroProducts[heroIndex]);
+    heroTrack.style.transition = "none";
+    heroTrack.style.transform = "translateX(0)";
+    setAccessibleHeroSlide(0);
+    heroCount.textContent = `01 / ${String(heroProducts.length).padStart(2, "0")}`;
+    heroTrack.getBoundingClientRect();
+    heroTrack.style.transition = "";
+    updateHeroAutoplay();
+  }
+
+  function setAccessibleHeroSlide(activeIndex) {
+    Array.from(heroTrack.children).forEach((slide, index) => {
+      const active = index === activeIndex;
+      slide.setAttribute("aria-hidden", String(!active));
+      slide.tabIndex = active ? 0 : -1;
+      if (active) slide.removeAttribute("inert");
+      else slide.setAttribute("inert", "");
+    });
+  }
+
+  function finishHeroTransition() {
+    if (!heroTransitioning) return;
+    window.clearTimeout(heroTransitionTimer);
+    heroTransitionTimer = null;
+    if (heroDirection > 0) heroTrack.firstElementChild.remove();
+    else heroTrack.lastElementChild.remove();
+    heroTrack.style.transition = "none";
+    heroTrack.style.transform = "translateX(0)";
+    setAccessibleHeroSlide(0);
+    heroTransitioning = false;
+    heroTrack.getBoundingClientRect();
+    heroTrack.style.transition = "";
+
+    const queuedDirection = queuedHeroDirections.shift();
+    if (queuedDirection) showHeroSlide(queuedDirection, true);
+  }
+
+  function showHeroSlide(direction, queueIfTransitioning = false) {
+    if (heroProducts.length < 2) return;
+    if (heroTransitioning) {
+      if (queueIfTransitioning && queuedHeroDirections.length < 8) {
+        queuedHeroDirections.push(direction);
+      }
+      return;
+    }
+
+    heroDirection = direction;
+    heroIndex = (heroIndex + direction + heroProducts.length) % heroProducts.length;
+    const nextSlide = heroSlideMarkup(heroProducts[heroIndex]);
+    if (direction > 0) {
+      heroTrack.insertAdjacentHTML("beforeend", nextSlide);
+      heroTrack.style.transform = "translateX(0)";
+      heroTrack.getBoundingClientRect();
+      heroTrack.style.transform = "translateX(-100%)";
+      setAccessibleHeroSlide(1);
+    } else {
+      heroTrack.insertAdjacentHTML("afterbegin", nextSlide);
+      heroTrack.style.transition = "none";
+      heroTrack.style.transform = "translateX(-100%)";
+      heroTrack.getBoundingClientRect();
+      setAccessibleHeroSlide(0);
+      heroTrack.style.transition = "";
+      heroTrack.style.transform = "translateX(0)";
+    }
+    heroTransitioning = true;
+    heroCount.textContent = `${String(heroIndex + 1).padStart(2, "0")} / ${String(heroProducts.length).padStart(2, "0")}`;
+    heroTransitionTimer = window.setTimeout(finishHeroTransition, heroTransitionDuration + 300);
+    if (reducedMotion.matches) finishHeroTransition();
+  }
+
+  ["transitionend", "transitioncancel"].forEach((eventName) => {
+    heroTrack.addEventListener(eventName, (event) => {
+      if (event.target === heroTrack && event.propertyName === "transform") finishHeroTransition();
+    });
+  });
+
+  function updateHeroAutoplay() {
+    window.clearInterval(heroTimer);
+    if (heroPaused || heroProducts.length < 2 || document.hidden) return;
+    heroTimer = window.setInterval(() => showHeroSlide(1), 3000);
+  }
+
+  document.getElementById("hero-previous").addEventListener("click", () => showHeroSlide(-1, true));
+  document.getElementById("hero-next").addEventListener("click", () => showHeroSlide(1, true));
+  heroCarousel.addEventListener("mouseenter", () => window.clearInterval(heroTimer));
+  heroCarousel.addEventListener("mouseleave", updateHeroAutoplay);
+  heroCarousel.addEventListener("focusin", () => window.clearInterval(heroTimer));
+  heroCarousel.addEventListener("focusout", (event) => {
+    if (!heroCarousel.contains(event.relatedTarget)) updateHeroAutoplay();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && heroTransitioning) finishHeroTransition();
+    updateHeroAutoplay();
+  });
+  reducedMotion.addEventListener?.("change", (event) => {
+    heroPaused = event.matches;
+    if (heroPaused && heroTransitioning) finishHeroTransition();
+    updateHeroAutoplay();
+  });
+
+  popularPeriods.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-period]");
+    if (!button) return;
+    activePeriod = button.dataset.period;
+    popularPeriods.querySelectorAll("button").forEach((entry) => entry.classList.toggle("active", entry === button));
+    renderCatalog();
+  });
+
+  function renderCatalog() {
+    const query = document.querySelector(".search input")?.value.trim() || "";
+    const normalizedQuery = normalizeSearch(query);
+    const availability = document.getElementById("availability-filter")?.value || "all";
+    const diet = document.getElementById("diet-filter")?.value || "all";
+    const isPopularView = activeCategory === "Popular";
+    const popularCounts = isPopularView ? getPopularCounts(activePeriod) : new Map();
+    popularPeriods.hidden = !isPopularView;
+    let visible = catalog
+      .map((item) => ({ item, score: searchScore(item, query), sales: popularCounts.get(item.id) || 0 }))
+      .filter(({ item, score }) =>
+        score > 0 &&
+        (normalizedQuery ||
+          activeCategory === "All" ||
+          (isPopularView ? popularCounts.has(item.id) : item.category === activeCategory)) &&
+        (availability !== "available" || item.isAvailable) &&
+        (diet === "all" ||
+          (diet === "veg" && item.isVeg) ||
+          (diet === "nonveg" && !item.isVeg && item.dietType !== "egg") ||
+          (diet === "egg" && (item.dietType === "egg" ||
+            /\begg\b/i.test(`${item.name} ${item.description}`))))
+      )
+      .sort((a, b) => isPopularView ? b.sales - a.sales || b.score - a.score : b.score - a.score)
+      .map(({ item, sales }, index) => ({ ...item, periodOrders: sales, popularityRank: isPopularView ? index + 1 : 0 }));
+
+    if (!visible.length) {
+      grid.innerHTML = "";
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.style.gridColumn = "1/-1";
+      const title = document.createElement("h3");
+      title.textContent = normalizedQuery ? `"${query}" is not available on the menu` :
+        isPopularView ? "No orders recorded for this period yet" : "No dishes found";
+      const copy = document.createElement("p");
+      copy.textContent = normalizedQuery ? "Try another dish name or a related keyword." :
+        isPopularView ? "Popular dishes will appear here as orders are recorded." : "Try a different category or search.";
+      empty.append(title, copy);
+      grid.appendChild(empty);
+      const heading = document.querySelector(".menu-heading h2");
+      heading.textContent = normalizedQuery ? "Search results" : isPopularView ? "Popular today" : activeCategory;
+      return;
+    }
+    const heading = document.querySelector(".menu-heading h2");
+    popularPeriods.hidden = !isPopularView;
+    heading.textContent = normalizedQuery ? `Results for "${query}"` :
+      activeCategory === "Popular" ? `Popular ${activePeriod === "day" ? "today" : activePeriod === "week" ? "this week" : "this month"}` :
+      activeCategory === "All" ? "All dishes" : activeCategory;
+    grid.innerHTML = visible.map((item) => `
+      <article class="food-card" data-id="${item.id}" tabindex="0" role="link" aria-label="View ${item.name} details">
+        <img class="food-card-image" src="${item.image}" alt="${item.name}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22600%22 height=%22450%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%232d322f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23f7f4eb%22%3E${encodeURIComponent(item.name)}%3C/text%3E%3C/svg%3E'">
+        <div class="food-card-body">
+          <span class="eyebrow">${item.category}${item.popularityRank ? ` · #${item.popularityRank} popular` : ""}</span>
+          <h3>${item.name}</h3>
+          <p class="food-card-description">${item.description || ""}</p>
+          <div class="food-card-status-row">
+            <span class="status ${item.isAvailable ? "" : "danger"}">${item.isAvailable ? "Available" : "Sold out"} · ★ ${item.rating}</span>
+            <span class="food-card-diet ${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "is-egg" : item.isVeg ? "is-veg" : "is-non-veg"}" title="${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "Contains egg" : item.isVeg ? "Vegetarian" : "Non-vegetarian"}">●</span>
+          </div>
+          ${item.popularityRank ? `<p class="food-card-orders">${item.periodOrders} ordered ${activePeriod === "day" ? "today" : activePeriod === "week" ? "this week" : "this month"}</p>` : ""}
+          <div class="food-meta">
+            <span class="price">${rupees(item.price)}</span>
+            <span class="food-card-link">View dish</span>
+          </div>
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function getCart() {
+    return trayStorage.get("trayup-cart", []);
+  }
+
+  function saveCart(cart) {
+    trayStorage.set("trayup-cart", cart);
+    renderCart();
+  }
+
+  function renderCart() {
+    const cart = getCart();
+    document.getElementById("cart-count").textContent = cart.reduce((sum, item) => sum + item.qty, 0);
+    document.getElementById("cart-total").textContent = rupees(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
+    document.getElementById("cart-items").innerHTML = cart.length ? cart.map((item) => `
+      <div class="cart-item">
+        <img src="${item.image}" alt="">
+        <div><strong>${item.name}</strong><span>${rupees(item.price)}</span>
+          <div class="qty-control">
+            <button type="button" data-qty="-1" data-id="${item.id}" aria-label="Decrease quantity">−</button>
+            <span>${item.qty}</span>
+            <button type="button" data-qty="1" data-id="${item.id}" aria-label="Increase quantity">+</button>
+          </div>
+        </div>
+      </div>
+    `).join("") : `<div class="empty-state"><p>Your cart is empty</p></div>`;
+  }
+
+  grid.addEventListener("click", (event) => {
+    const card = event.target.closest(".food-card");
+    if (card) window.location.href = `./student/product.html?id=${encodeURIComponent(card.dataset.id)}`;
+  });
+  grid.addEventListener("keydown", (event) => {
+    const card = event.target.closest(".food-card");
+    if (card && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      window.location.href = `./student/product.html?id=${encodeURIComponent(card.dataset.id)}`;
+    }
+  });
+
+  document.getElementById("open-cart").addEventListener("click", () => drawer.classList.add("open"));
+  document.getElementById("close-cart").addEventListener("click", () => drawer.classList.remove("open"));
+  document.querySelector(".search").addEventListener("submit", (event) => {
+    event.preventDefault();
+    activeCategory = "All";
+    document.querySelectorAll(".category-nav a").forEach((entry) =>
+      entry.classList.toggle("active", entry.dataset.navCategory === "All")
+    );
+    renderCatalog();
+    document.getElementById("popular").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.querySelector(".search input").addEventListener("input", () => {
+    if (document.querySelector(".search input").value.trim()) {
+      activeCategory = "All";
+      document.querySelectorAll(".category-nav a").forEach((entry) =>
+        entry.classList.toggle("active", entry.dataset.navCategory === "All")
+      );
+    }
+    renderCatalog();
+  });
+  document.getElementById("availability-filter").addEventListener("change", renderCatalog);
+  document.getElementById("diet-filter").addEventListener("change", (event) => {
+    if (event.target.value !== "all") {
+      activeCategory = "All";
+      document.querySelectorAll(".category-nav a").forEach((entry) =>
+        entry.classList.toggle("active", entry.dataset.navCategory === "All")
+      );
+    }
+    renderCatalog();
+  });
+  document.getElementById("clear-search").addEventListener("click", () => {
+    document.querySelector(".search input").value = "";
+    document.getElementById("availability-filter").value = "all";
+    document.getElementById("diet-filter").value = "all";
+    activeCategory = "Popular";
+    document.querySelectorAll(".category-nav a").forEach((entry) =>
+      entry.classList.toggle("active", entry.dataset.navCategory === "Popular")
+    );
+    renderCatalog();
+  });
+
+  document.querySelector(".category-nav").addEventListener("click", (event) => {
+    const link = event.target.closest("[data-nav-category]");
+    if (!link) return;
+    const category = link.dataset.navCategory;
+    if (category === "My Orders") return;
+    event.preventDefault();
+    activeCategory = category;
+    document.querySelector(".search input").value = "";
+    document.querySelectorAll(".category-nav a").forEach((entry) => entry.classList.toggle("active", entry === link));
+    renderCatalog();
+    document.getElementById("popular").scrollIntoView({ behavior: "smooth" });
+  });
+
+  document.getElementById("cart-items").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-qty]");
+    if (!button) return;
+    const cart = getCart();
+    const item = cart.find((entry) => entry.id === Number(button.dataset.id));
+    if (!item) return;
+    item.qty += Number(button.dataset.qty);
+    saveCart(cart.filter((entry) => entry.qty > 0));
+  });
+
+  renderHero();
+  renderCatalog();
+  renderCart();
+})();

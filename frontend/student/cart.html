@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Cart — trayUP</title><link rel="stylesheet" href="../css/global.css?v=premium-static-doodle-v1"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/student.css"><link rel="stylesheet" href="../css/responsive.css?v=video-polish-v1"></head>
+<body class="student-page">
+<div id="app-header"></div>
+<main class="container" style="max-width:760px;padding:40px 0">
+  <h1 style="font-family:var(--serif);font-size:42px;font-weight:400;margin-bottom:20px">Your order</h1>
+  <div id="cart-list"></div>
+  <div class="cart-foot" style="margin-top:20px;border:1px solid var(--line);border-radius:10px;background:#fff">
+    <div class="cart-total"><span>Subtotal</span><strong id="cart-total">₹0</strong></div>
+    <button class="btn btn-secondary" id="clear-cart" type="button" style="width:100%;margin-bottom:8px">Clear cart</button>
+    <a class="btn btn-primary" href="./checkout.html">Continue to checkout</a>
+  </div>
+</main>
+<script src="../shared/config.js"></script><script src="../shared/storage.js"></script><script src="../shared/components.js?v=static-doodles-v1"></script><script src="../shared/notifications.js"></script>
+<script>
+document.getElementById("app-header").innerHTML=trayComponents.header();
+function renderCart(){
+ const cart=trayStorage.get("trayup-cart",[]);
+ const total=cart.reduce((n,i)=>n+i.price*i.qty,0);
+ const cartCount=document.getElementById("cart-count");
+ if(cartCount)cartCount.textContent=cart.reduce((sum,item)=>sum+item.qty,0);
+ document.getElementById("cart-total").textContent="₹"+total.toLocaleString("en-IN");
+ document.getElementById("cart-list").innerHTML=cart.length?cart.map(i=>`
+ <div class="cart-item" style="background:#fff;padding:12px;border:1px solid var(--line);margin-bottom:8px;border-radius:10px">
+ <img src="${i.image}" alt=""><div><strong>${i.name}</strong><span style="display:block;color:var(--muted);font-size:13px;margin:4px 0">₹${i.price} each</span>
+ <div class="qty-control"><button type="button" data-delta="-1" data-id="${i.id}">−</button><span>${i.qty}</span><button type="button" data-delta="1" data-id="${i.id}">+</button></div></div>
+ <div style="text-align:right"><strong>₹${i.price*i.qty}</strong><button type="button" data-remove="${i.id}" style="display:block;border:0;background:none;color:var(--danger);font-size:12px;margin:8px 0 0 auto;cursor:pointer">Remove</button></div>
+ </div>`).join(""):`<div class="empty-state"><h3>Your cart is empty</h3><p><a href="../index.html" style="text-decoration:underline">Return to the menu</a></p></div>`;
+}
+document.getElementById("cart-list").addEventListener("click",e=>{
+ const cart=trayStorage.get("trayup-cart",[]);
+ const qtyButton=e.target.closest("[data-delta]");
+ const removeButton=e.target.closest("[data-remove]");
+ if(qtyButton){const item=cart.find(i=>i.id===Number(qtyButton.dataset.id));if(item){item.qty+=Number(qtyButton.dataset.delta);trayStorage.set("trayup-cart",cart.filter(i=>i.qty>0));renderCart();}}
+ if(removeButton){trayStorage.set("trayup-cart",cart.filter(i=>i.id!==Number(removeButton.dataset.remove)));trayNotify("Item removed");renderCart();}
+});
+document.getElementById("clear-cart").addEventListener("click",()=>{
+ trayStorage.remove("trayup-cart");
+ trayNotify("Cart cleared");
+ renderCart();
+});
+renderCart();
+</script>
+</body></html>
