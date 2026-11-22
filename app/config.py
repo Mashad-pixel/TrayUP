@@ -27,6 +27,9 @@ class Config:
     ORDER_PAYMENT_EXPIRY_MINUTES = int(os.getenv("ORDER_PAYMENT_EXPIRY_MINUTES", "10"))
     COLLECTION_TOKEN_EXPIRY_MINUTES = int(os.getenv("COLLECTION_TOKEN_EXPIRY_MINUTES", "60"))
 
+    # Canteen clock offset from UTC, used to group reports by local day (330 = India, UTC+05:30).
+    CANTEEN_UTC_OFFSET_MINUTES = int(os.getenv("CANTEEN_UTC_OFFSET_MINUTES", "330"))
+
     RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
@@ -38,6 +41,8 @@ class DevelopmentConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
+    # Existing API tests remain focused; CSRF is explicitly enabled in security tests.
+    WTF_CSRF_ENABLED = False
     SECRET_KEY = "test-secret-key"
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     RATELIMIT_ENABLED = False
@@ -46,7 +51,7 @@ class TestingConfig(Config):
     # Always empty in tests, even if .env has real keys, so tests never call Razorpay.
     RAZORPAY_KEY_ID = ""
     RAZORPAY_KEY_SECRET = ""
-    RAZORPAY_WEBHOOK_SECRET = ""
+    RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"
 
 
 class ProductionConfig(Config):

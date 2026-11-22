@@ -87,3 +87,14 @@ def test_real_login_can_create_order(anon_client, student, menu):
 
     assert response.status_code == 201
     assert response.get_json()["data"]["total_paise"] == 3000
+
+
+def test_login_returns_csrf_token_for_next_requests(anon_client, student):
+    response = anon_client.post(
+        "/api/auth/login",
+        json={"email": "student@test.com", "password": "StrongPass123!"},
+    )
+
+    assert response.status_code == 200
+    token = response.get_json()["data"]["csrf_token"]
+    assert isinstance(token, str) and len(token) > 20

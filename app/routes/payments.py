@@ -3,10 +3,12 @@ import json
 from flask import Blueprint, current_app, request
 from flask_login import current_user, login_required
 
-from app.extensions import limiter
+from app.extensions import csrf, limiter
 from app.responses import error_response, success_response
 from app.services.errors import OrderError
 from app.services.payment_service import (
+    LATE_PAYMENT_CODE,
+    LATE_PAYMENT_MESSAGE,
     create_payment_order,
     process_webhook,
     verify_checkout,
@@ -75,14 +77,17 @@ def verify_payment_route():
         )
 
     try:
-        order = verify_checkout(
-            current_user.id,
-            razorpay_order_id,
-            razorpay_payment_id,
-            razorpay_signature,
+        order, refund_required = verify_checkout(
+            order_id=razorpay_order_id,
+            payment_id=razorpay_payment_id,
+            signature=razorpay_signature,
+            student_id=current_user.id,
         )
     except OrderError as exc:
         return _order_error(exc)
+
+    if refund_required:
+        return error_response(LATE_PAYMENT_CODE, LATE_PAYMENT_MESSAGE, 409)
 
     return success_response("Payment verified", {
         "order_id": order.id,
@@ -93,6 +98,7 @@ def verify_payment_route():
 
 
 @payments_bp.route("/webhook", methods=["POST"])
+@csrf.exempt
 def razorpay_webhook():
     # Read the raw bytes first. The signature is calculated over exactly these bytes.
     raw_body = request.get_data(cache=False)
@@ -123,7 +129,7 @@ def razorpay_webhook():
         return error_response("INVALID_EVENT", "Webhook event type is missing.", 400)
 
     try:
-        outcome = process_webhook(event_id, event_type, raw_body, payload)
+        outcome = process_webhook(raw_body, signature, event_id, payload)
     except Exception:
         # 500 makes Razorpay retry the delivery.
         current_app.logger.exception("Webhook processing failed for event %s", event_id)

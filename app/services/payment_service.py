@@ -1,9 +1,6 @@
 import hashlib
 import hmac
-from datetime import datetime, timezone
 
-import razorpay
-import requests
 from flask import current_app
 from sqlalchemy.exc import IntegrityError
 
@@ -14,377 +11,339 @@ from app.models.payment import Payment, PaymentRecordStatus
 from app.models.payment_attempt import AttemptStatus, PaymentAttempt
 from app.models.webhook_event import WebhookEvent, WebhookStatus
 from app.services.errors import OrderError
+from app.services.inventory_service import commit_reservations
+from app.services.order_service import expire_order, payment_window_closed
+from app.services.razorpay_client import PROVIDER_ERRORS, get_razorpay_client
+from app.services.refund_service import handle_refund_failed_event, handle_refund_processed_event
+from app.services.time_utils import utcnow
 
 CURRENCY = "INR"
 
 # Razorpay rejects charges below ₹1.00 (100 paise).
 MIN_AMOUNT_PAISE = 100
 
-# Failures when calling Razorpay: API errors from the SDK, or network problems.
-PROVIDER_ERRORS = (
-    razorpay.errors.BadRequestError,
-    razorpay.errors.GatewayError,
-    razorpay.errors.ServerError,
-    requests.RequestException,
-)
+# Raised when money is captured after the order stopped waiting for payment. The payment
+# is recorded as REFUND_REQUIRED and an admin refunds it. The order is not fulfilled.
+LATE_PAYMENT_CODE = "ORDER_NOT_PAYABLE_REFUND_REQUIRED"
+LATE_PAYMENT_MESSAGE = "Payment was received after this order expired, so it will be refunded."
 
 
-def utcnow():
-    return datetime.now(timezone.utc)
+def _hmac_signature(secret, message):
+    return hmac.new(secret.encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def get_razorpay_client():
-    key_id = current_app.config.get("RAZORPAY_KEY_ID", "")
-    key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", "")
-    if not key_id or not key_secret:
-        raise OrderError(
-            "PAYMENTS_NOT_CONFIGURED",
-            "Online payments are not configured on this server.",
-            503,
-        )
-    return razorpay.Client(auth=(key_id, key_secret))
+def verify_checkout_signature(order_id, payment_id, signature):
+    secret = current_app.config["RAZORPAY_KEY_SECRET"]
+    if not secret:
+        raise OrderError("PAYMENTS_NOT_CONFIGURED", "Online payments are not configured on this server.", 503)
+    expected = _hmac_signature(secret, f"{order_id}|{payment_id}")
+    return _signature_matches(expected, signature)
 
 
-def _hmac_sha256_hex(secret, message_bytes):
-    return hmac.new(secret.encode("utf-8"), message_bytes, hashlib.sha256).hexdigest()
-
-
-def _signatures_match(expected, received):
-    # compare_digest raises TypeError on non-ASCII text, so reject that first.
+def _signature_matches(expected, received):
+    # compare_digest raises TypeError on non-ASCII text, which would turn bad input into a 500.
     if not isinstance(received, str) or not received.isascii():
         return False
     return hmac.compare_digest(expected, received)
 
 
-def verify_checkout_signature(provider_order_id, provider_payment_id, signature):
-    """Razorpay Checkout signature: HMAC-SHA256 of 'order_id|payment_id' with the key secret."""
-    secret = current_app.config.get("RAZORPAY_KEY_SECRET", "")
-    if not secret:
-        raise OrderError(
-            "PAYMENTS_NOT_CONFIGURED",
-            "Online payments are not configured on this server.",
-            503,
-        )
-    message = f"{provider_order_id}|{provider_payment_id}".encode("utf-8")
-    return _signatures_match(_hmac_sha256_hex(secret, message), signature)
-
-
 def verify_webhook_signature(raw_body, signature):
-    """Razorpay webhook signature: HMAC-SHA256 of the raw request body with the webhook secret."""
-    secret = current_app.config.get("RAZORPAY_WEBHOOK_SECRET", "")
+    secret = current_app.config["RAZORPAY_WEBHOOK_SECRET"]
     if not secret:
-        raise OrderError(
-            "WEBHOOKS_NOT_CONFIGURED",
-            "Webhook processing is not configured on this server.",
-            503,
-        )
-    return _signatures_match(_hmac_sha256_hex(secret, raw_body), signature)
+        raise OrderError("WEBHOOKS_NOT_CONFIGURED", "Webhook processing is not configured on this server.", 503)
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return _signature_matches(expected, signature)
 
 
-def create_payment_order(order_id, student_id):
-    """Create (or reuse) a Razorpay order for one of the student's pending orders.
-
-    Returns (payment, order). The amount always comes from the database.
-    """
-    try:
-        # Lock the order row so two quick clicks can't create two Razorpay orders.
-        order = (
-            Order.query.filter_by(id=order_id, student_id=student_id)
-            .with_for_update()
-            .first()
-        )
-        if order is None:
-            raise OrderError("ORDER_NOT_FOUND", "Order not found.", 404)
-
-        if (
-            order.order_status != OrderStatus.PENDING_PAYMENT
-            or order.payment_status != PaymentStatus.PENDING
-        ):
-            raise OrderError("ORDER_NOT_PAYABLE", "This order cannot be paid for.", 409)
-
-        if order.total_paise < MIN_AMOUNT_PAISE:
-            raise OrderError(
-                "AMOUNT_TOO_LOW",
-                "Order total is below the minimum payable amount of ₹1.00.",
-                400,
-            )
-
-        # Reuse the open Razorpay order so retries never create duplicates.
-        existing = Payment.query.filter_by(
-            order_id=order.id,
-            status=PaymentRecordStatus.CREATED,
-        ).first()
-        if existing is not None:
-            return existing, order
-
-        client = get_razorpay_client()
-        try:
-            razorpay_order = client.order.create({
-                "amount": order.total_paise,
-                "currency": CURRENCY,
-                "receipt": order.order_number,
-                "payment_capture": 1,
-            })
-        except PROVIDER_ERRORS:
-            raise OrderError(
-                "PAYMENT_PROVIDER_ERROR",
-                "Could not start payment. Please try again.",
-                502,
-            )
-
-        payment = Payment(
-            order_id=order.id,
-            payment_provider="razorpay",
-            provider_order_id=razorpay_order["id"],
-            amount_paise=order.total_paise,
-            currency=CURRENCY,
-            status=PaymentRecordStatus.CREATED,
-        )
-        db.session.add(payment)
-        db.session.commit()
-        return payment, order
-
-    except Exception:
-        db.session.rollback()
-        raise
-
-
-def _record_attempt(order, payment, status, provider_payment_id, failure_reason=None):
-    if provider_payment_id:
-        already_logged = PaymentAttempt.query.filter_by(
-            provider_payment_id=provider_payment_id,
-            status=status,
-        ).first()
-        if already_logged is not None:
-            return
-
-    attempt_count = PaymentAttempt.query.filter_by(order_id=order.id).count()
+def _record_attempt(payment_id, outcome, provider_payment_id=None, error_code=None, message=None):
+    payment = db.session.get(Payment, payment_id)
+    if payment is None:
+        return
+    attempt_number = (
+        PaymentAttempt.query.filter_by(order_id=payment.order_id).count() + 1
+    )
     db.session.add(PaymentAttempt(
-        order_id=order.id,
+        order_id=payment.order_id,
         provider_order_id=payment.provider_order_id,
+        attempt_number=attempt_number,
+        status=outcome,
         provider_payment_id=provider_payment_id,
-        attempt_number=attempt_count + 1,
-        status=status,
-        failure_reason=failure_reason,
+        failure_reason=message or error_code,
     ))
 
 
-def _confirm_captured_payment(provider_order_id, provider_payment_id, amount_paise, currency):
-    """Mark the order as paid. This is the only code path that does so.
-
-    Safe to call more than once for the same payment. Returns the order.
-    """
-    try:
-        payment = (
-            Payment.query.filter_by(provider_order_id=provider_order_id)
-            .with_for_update()
-            .first()
-        )
+def _confirm_captured_payment(
+    payment=None,
+    provider_payment_id=None,
+    amount_paise=None,
+    currency=None,
+    provider_order_id=None,
+):
+    """Confirm a captured payment. Idempotent for the same provider payment ID."""
+    if payment is None:
+        payment = Payment.query.filter_by(provider_order_id=provider_order_id).first()
         if payment is None:
             raise OrderError("PAYMENT_NOT_FOUND", "Payment not found.", 404)
+    if amount_paise != payment.amount_paise or currency != payment.currency:
+        raise OrderError("PAYMENT_MISMATCH", "Captured amount or currency does not match the order.", 409)
 
-        order = (
-            Order.query.filter_by(id=payment.order_id)
-            .with_for_update()
-            .first()
-        )
+    if payment.status == PaymentRecordStatus.PAID:
+        if payment.provider_payment_id == provider_payment_id:
+            return payment, False
+        raise OrderError("PAYMENT_CONFLICT", "A different payment already paid this order.", 409)
 
-        if amount_paise != payment.amount_paise or currency != payment.currency:
-            raise OrderError(
-                "PAYMENT_MISMATCH",
-                "Payment amount or currency does not match the order.",
-                400,
-            )
-
-        if payment.status == PaymentRecordStatus.PAID:
-            if payment.provider_payment_id == provider_payment_id:
-                # Already confirmed, for example when verify and the webhook both arrive.
-                return order
-            raise OrderError(
-                "PAYMENT_CONFLICT",
-                "This order already has a different successful payment.",
-                409,
-            )
-
-        if order.order_status != OrderStatus.PENDING_PAYMENT:
-            # Money was captured but the order can't be fulfilled. Needs a refund review.
-            raise OrderError(
-                "ORDER_NOT_PAYABLE",
-                "Order is no longer awaiting payment. Flag this payment for refund.",
-                409,
-            )
-
-        payment.status = PaymentRecordStatus.PAID
+    order = Order.query.filter_by(id=payment.order_id).with_for_update().first()
+    if order is None:
+        payment.status = PaymentRecordStatus.REFUND_REQUIRED
         payment.provider_payment_id = provider_payment_id
-        payment.verified_at = utcnow()
-
-        previous_status = order.order_status
-        order.payment_status = PaymentStatus.PAID
-        order.order_status = OrderStatus.RECEIVED
-
-        db.session.add(OrderStatusHistory(
-            order_id=order.id,
-            previous_status=previous_status,
-            new_status=OrderStatus.RECEIVED,
-            changed_by=None,
-            changed_at=utcnow(),
-            notes="Payment confirmed",
-        ))
-
-        _record_attempt(order, payment, AttemptStatus.SUCCEEDED, provider_payment_id)
-
         db.session.commit()
-        return order
+        return payment, True
 
-    except Exception:
-        db.session.rollback()
-        raise
+    # The payment window may have elapsed before the scheduled expiry job ran.
+    if order.order_status == OrderStatus.PENDING_PAYMENT and payment_window_closed(order):
+        expire_order(order)
+        db.session.flush()
 
-
-def verify_checkout(student_id, provider_order_id, provider_payment_id, signature):
-    """Called by the browser after Razorpay Checkout succeeds.
-
-    The browser's success message is not trusted. The signature is checked, then the
-    payment is fetched from Razorpay and must show as captured with the right amount.
-    """
-    payment = Payment.query.filter_by(provider_order_id=provider_order_id).first()
-    if payment is None:
-        raise OrderError("PAYMENT_NOT_FOUND", "Payment not found.", 404)
-
-    order = db.session.get(Order, payment.order_id)
-    if order is None or order.student_id != student_id:
-        # Same response for "not yours" and "doesn't exist".
-        raise OrderError("PAYMENT_NOT_FOUND", "Payment not found.", 404)
-
-    if not verify_checkout_signature(provider_order_id, provider_payment_id, signature):
-        raise OrderError(
-            "PAYMENT_VERIFICATION_FAILED",
-            "Payment signature is invalid.",
-            400,
+    payable = (
+        order.order_status == OrderStatus.PENDING_PAYMENT
+        and order.payment_status == PaymentStatus.PENDING
+    )
+    if not payable:
+        payment.status = PaymentRecordStatus.REFUND_REQUIRED
+        payment.provider_payment_id = provider_payment_id
+        _record_attempt(
+            payment.id,
+            AttemptStatus.REFUND_REQUIRED,
+            provider_payment_id=provider_payment_id,
+            error_code=LATE_PAYMENT_CODE,
+            message=LATE_PAYMENT_MESSAGE,
         )
+        db.session.commit()
+        return payment, True
+
+    # Verify the stock hold exists and convert it to a sale in the same transaction.
+    commit_reservations(order.id)
+
+    now = utcnow()
+    payment.status = PaymentRecordStatus.PAID
+    payment.provider_payment_id = provider_payment_id
+    payment.verified_at = now
+
+    order.payment_status = PaymentStatus.PAID
+    order.order_status = OrderStatus.RECEIVED
+    order.updated_at = now
+
+    db.session.add(OrderStatusHistory(
+        order_id=order.id,
+        previous_status=OrderStatus.PENDING_PAYMENT,
+        new_status=OrderStatus.RECEIVED,
+        changed_by=None,  # Payment webhook/system event
+        changed_at=now,
+        notes="Payment captured and verified",
+    ))
+
+    _record_attempt(payment.id, AttemptStatus.SUCCESS, provider_payment_id=provider_payment_id)
+    db.session.commit()
+    return payment, False
+
+
+def create_payment_order(internal_order_id, student_id):
+    """Create (or return) a Razorpay order for one of the student's pending orders."""
+    order = Order.query.filter_by(id=internal_order_id, student_id=student_id).with_for_update().first()
+    if order is None:
+        raise OrderError("ORDER_NOT_FOUND", "Order not found.", 404)
+
+    if order.order_status != OrderStatus.PENDING_PAYMENT or order.payment_status != PaymentStatus.PENDING:
+        raise OrderError("ORDER_NOT_PAYABLE", "This order is not waiting for payment.", 409)
+    if payment_window_closed(order):
+        expire_order(order)
+        db.session.commit()
+        raise OrderError("ORDER_EXPIRED", "This order's payment window has expired. Place a new order.", 409)
+
+    if order.total_paise < MIN_AMOUNT_PAISE:
+        raise OrderError("AMOUNT_TOO_SMALL", "The minimum payment amount is ₹1.00.", 400)
+
+    existing = Payment.query.filter_by(order_id=order.id, status=PaymentRecordStatus.CREATED).first()
+    if existing:
+        return existing, order
 
     client = get_razorpay_client()
     try:
-        details = client.payment.fetch(provider_payment_id)
-    except PROVIDER_ERRORS:
-        raise OrderError(
-            "PAYMENT_PROVIDER_ERROR",
-            "Could not confirm the payment with Razorpay. Please try again.",
-            502,
-        )
+        provider_order = client.order.create({
+            "amount": order.total_paise,
+            "currency": CURRENCY,
+            "receipt": order.order_number,
+        })
+    except PROVIDER_ERRORS as exc:
+        raise OrderError("PAYMENT_PROVIDER_ERROR", "Could not start payment. Please try again.", 502) from exc
 
-    if details.get("order_id") != provider_order_id:
-        raise OrderError("PAYMENT_MISMATCH", "Payment does not belong to this order.", 400)
+    payment = Payment(
+        order_id=order.id,
+        provider_order_id=provider_order["id"],
+        amount_paise=order.total_paise,
+        currency=CURRENCY,
+        status=PaymentRecordStatus.CREATED,
+    )
+    db.session.add(payment)
+    try:
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        # A concurrent payment creation may have committed first.
+        existing = Payment.query.filter_by(order_id=order.id, status=PaymentRecordStatus.CREATED).first()
+        if existing:
+            return existing, order
+        raise OrderError("PAYMENT_CREATE_FAILED", "Could not record payment. Please retry.", 500) from exc
+    return payment, order
 
+
+def verify_checkout(order_id, payment_id, signature, student_id):
+    payment = Payment.query.join(Order).filter(
+        Payment.provider_order_id == order_id,
+        Order.student_id == student_id,
+    ).first()
+    if payment is None:
+        raise OrderError("PAYMENT_NOT_FOUND", "Payment not found.", 404)
+
+    if not verify_checkout_signature(order_id, payment_id, signature):
+        _record_attempt(payment.id, AttemptStatus.SIGNATURE_FAILED, provider_payment_id=payment_id)
+        db.session.commit()
+        raise OrderError("INVALID_SIGNATURE", "Payment verification failed.", 400)
+
+    client = get_razorpay_client()
+    try:
+        details = client.payment.fetch(payment_id)
+    except PROVIDER_ERRORS as exc:
+        raise OrderError("PAYMENT_PROVIDER_ERROR", "Could not verify payment yet. Please retry.", 502) from exc
+
+    if details.get("order_id") != order_id:
+        raise OrderError("PAYMENT_MISMATCH", "This payment belongs to a different order.", 409)
     if details.get("status") != "captured":
-        raise OrderError(
-            "PAYMENT_NOT_CAPTURED",
-            "Payment is not complete yet. Please wait a moment and try again.",
-            409,
-        )
+        raise OrderError("PAYMENT_NOT_CAPTURED", "Payment is not captured yet.", 409)
 
-    return _confirm_captured_payment(
-        provider_order_id=provider_order_id,
-        provider_payment_id=provider_payment_id,
+    payment, refund_required = _confirm_captured_payment(
+        payment,
+        provider_payment_id=payment_id,
         amount_paise=details.get("amount"),
         currency=details.get("currency"),
     )
+    order = db.session.get(Order, payment.order_id)
+    return order, refund_required
 
 
-def _payment_entity(payload):
-    entity = ((payload or {}).get("payload") or {}).get("payment") or {}
-    return entity.get("entity") or {}
+def _handle_payment_captured(entity):
+    order_id = entity.get("order_id")
+    provider_payment_id = entity.get("id")
 
-
-def _handle_payment_captured(payload):
-    entity = _payment_entity(payload)
-    provider_order_id = entity.get("order_id")
-
-    if not provider_order_id or not Payment.query.filter_by(provider_order_id=provider_order_id).first():
-        return WebhookStatus.IGNORED
+    payment = Payment.query.filter_by(provider_order_id=order_id).first() if order_id else None
+    if payment is None:
+        # A capture for an order this system never created. Acknowledge it so Razorpay
+        # stops retrying. The payment is logged for manual review.
+        current_app.logger.warning(
+            "Captured Razorpay payment %s has no internal order; ignored.", provider_payment_id
+        )
+        return "ignored"
 
     _confirm_captured_payment(
-        provider_order_id=provider_order_id,
-        provider_payment_id=entity.get("id"),
-        amount_paise=entity.get("amount"),
-        currency=entity.get("currency"),
-    )
-    return WebhookStatus.PROCESSED
-
-
-def _handle_payment_failed(payload):
-    entity = _payment_entity(payload)
-    provider_order_id = entity.get("order_id")
-    if not provider_order_id:
-        return WebhookStatus.IGNORED
-
-    payment = Payment.query.filter_by(provider_order_id=provider_order_id).first()
-    if payment is None or payment.status == PaymentRecordStatus.PAID:
-        # Unknown payment, or a late failure after success. Nothing to change.
-        return WebhookStatus.IGNORED
-
-    order = db.session.get(Order, payment.order_id)
-    reason = entity.get("error_description") or entity.get("error_reason") or "Payment failed"
-    _record_attempt(
-        order,
         payment,
-        AttemptStatus.FAILED,
-        entity.get("id"),
-        failure_reason=str(reason)[:255],
+        provider_payment_id,
+        entity.get("amount"),
+        entity.get("currency"),
     )
-    # The order stays pending_payment, and the same Razorpay order can be retried.
-    db.session.commit()
-    return WebhookStatus.PROCESSED
+    return "processed"
 
 
-WEBHOOK_HANDLERS = {
-    "payment.captured": _handle_payment_captured,
-    "payment.failed": _handle_payment_failed,
-}
+def _handle_payment_failed(entity):
+    order_id = entity.get("order_id")
+    payment = Payment.query.filter_by(provider_order_id=order_id).first() if order_id else None
+    if payment is None:
+        return "ignored"
+
+    # A late failure must not reverse a successful capture or refund-required payment.
+    if payment.status != PaymentRecordStatus.CREATED:
+        return "ignored"
+
+    _record_attempt(
+        payment.id,
+        AttemptStatus.FAILED,
+        provider_payment_id=entity.get("id"),
+        error_code=entity.get("error_code"),
+        message=entity.get("error_description"),
+    )
+    return "processed"
 
 
-def process_webhook(event_id, event_type, raw_body, payload):
-    """Store and apply one Razorpay webhook event.
+def _event_entity(payload):
+    return ((payload or {}).get("payload") or {}).get("payment", {}).get("entity") or {}
 
-    Returns 'processed', 'ignored', or 'duplicate'. Raises on failure so the
-    route returns 500 and Razorpay retries delivery.
+
+def _refund_entity(payload):
+    return ((payload or {}).get("payload") or {}).get("refund", {}).get("entity") or {}
+
+
+def _dispatch_webhook(event_type, payload):
+    """Apply one event. Returns 'processed' or 'ignored'. Raises when a retry is needed."""
+    if event_type == "payment.captured":
+        return _handle_payment_captured(_event_entity(payload))
+    if event_type == "payment.failed":
+        return _handle_payment_failed(_event_entity(payload))
+    if event_type == "refund.processed":
+        return handle_refund_processed_event(_refund_entity(payload))
+    if event_type == "refund.failed":
+        return handle_refund_failed_event(_refund_entity(payload))
+    # Unknown event types are recorded and acknowledged. Subscribe only to the events needed.
+    return "ignored"
+
+
+def process_webhook(raw_body, signature, event_id, payload):
+    """Verify and process one Razorpay webhook.
+
+    Returns 'processed', 'ignored', or 'duplicate'. Raises on failure, so the route
+    returns 500 and Razorpay retries the delivery.
     """
-    payload_hash = hashlib.sha256(raw_body).hexdigest()
+    if not verify_webhook_signature(raw_body, signature):
+        raise OrderError("INVALID_WEBHOOK_SIGNATURE", "Webhook signature is invalid.", 400)
+    if not event_id:
+        raise OrderError("MISSING_EVENT_ID", "Razorpay event ID is required.", 400)
 
-    event = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
-    if event is None:
-        event = WebhookEvent(
-            provider_event_id=event_id,
-            event_type=event_type,
-            payload_hash=payload_hash,
-            processing_status=WebhookStatus.RECEIVED,
-            received_at=utcnow(),
-        )
-        db.session.add(event)
-        try:
-            db.session.commit()
-        except IntegrityError:
-            # A parallel delivery stored the same event first.
-            db.session.rollback()
-            event = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
-
-    if event.processing_status in (WebhookStatus.PROCESSED, WebhookStatus.IGNORED):
+    existing = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
+    if existing and existing.processing_status in (WebhookStatus.PROCESSED, WebhookStatus.IGNORED):
         return "duplicate"
 
-    try:
-        handler = WEBHOOK_HANDLERS.get(event_type)
-        outcome = handler(payload) if handler else WebhookStatus.IGNORED
+    event_type = payload.get("event", "")
+    event = existing or WebhookEvent(
+        provider_event_id=event_id,
+        event_type=event_type,
+        payload_hash=hashlib.sha256(raw_body).hexdigest(),
+        processing_status=WebhookStatus.RECEIVED,
+    )
+    event.processing_status = WebhookStatus.RECEIVED
+    event.last_error = None
+    db.session.add(event)
+    db.session.flush()
 
-        event = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
+    try:
+        outcome = _dispatch_webhook(event_type, payload)
         event.processing_status = outcome
         event.processed_at = utcnow()
         db.session.commit()
         return outcome
 
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
-        event = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
-        if event is not None:
-            event.processing_status = WebhookStatus.FAILED
-            db.session.commit()
+        # Keep a failed record so Razorpay can retry it, and so an operator can inspect it.
+        failed = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
+        if failed:
+            failed.processing_status = WebhookStatus.FAILED
+            failed.last_error = str(exc)[:500]
+        else:
+            failed = WebhookEvent(
+                provider_event_id=event_id,
+                event_type=event_type,
+                payload_hash=hashlib.sha256(raw_body).hexdigest(),
+                processing_status=WebhookStatus.FAILED,
+                last_error=str(exc)[:500],
+            )
+            db.session.add(failed)
+        db.session.commit()
         raise

@@ -10,3 +10,11 @@ class OrderError(Exception):
         self.code = code
         self.message = message
         self.status = status
+
+
+class ServiceValidationError(ValueError):
+    """Raised when admin-managed settings fail input validation."""
+
+    def __init__(self, errors, message="Validation failed."):
+        super().__init__(message)
+        self.errors = errors

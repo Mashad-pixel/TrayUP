@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request, session
 from flask_login import current_user, login_required, login_user, logout_user
+from flask_wtf.csrf import generate_csrf
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import limiter
@@ -66,7 +67,11 @@ def login():
     session.clear()
     login_user(user)
 
-    return success_response("Logged in successfully", serialize_user(user))
+    # login clears the session, which also drops the old CSRF token. Return a new one so the
+    # frontend can keep making POST requests without an extra round trip.
+    data = serialize_user(user)
+    data["csrf_token"] = generate_csrf()
+    return success_response("Logged in successfully", data)
 
 
 @auth_bp.route("/logout", methods=["POST"])
@@ -74,7 +79,7 @@ def login():
 def logout():
     logout_user()
     session.clear()
-    return success_response("Logged out successfully")
+    return success_response("Logged out successfully", {"csrf_token": generate_csrf()})
 
 
 @auth_bp.route("/me", methods=["GET"])

@@ -88,3 +88,12 @@ def client(app, student):
 @pytest.fixture
 def anon_client(app):
     return app.test_client()
+
+
+@pytest.fixture
+def student_client(app, student):
+    test_client = app.test_client()
+    with test_client.session_transaction() as sess:
+        sess["_user_id"] = str(student.id)
+        sess["_fresh"] = True
+    return test_client
