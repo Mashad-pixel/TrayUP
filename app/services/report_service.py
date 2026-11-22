@@ -15,6 +15,13 @@ MAX_RANGE_DAYS = 366
 DEFAULT_SALES_DAYS = 30
 TOP_ITEMS_MAX = 50
 
+# Orders that were paid at some point. Refunds reduce revenue but don't remove the order from these numbers.
+PAID_STATUSES = (
+    PaymentStatus.PAID,
+    PaymentStatus.PARTIALLY_REFUNDED,
+    PaymentStatus.REFUNDED,
+)
+
 # Items deleted from the menu keep their sales, grouped under this label.
 REMOVED_CATEGORY_LABEL = "Removed from menu"
 

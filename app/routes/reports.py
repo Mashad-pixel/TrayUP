@@ -1,6 +1,6 @@
 from datetime import date
 
-from flask import Blueprint, request
+from flask import Blueprint, current_app, request
 from flask_login import login_required
 
 from app.models.user import UserRole
@@ -36,13 +36,15 @@ def _parse_dates():
     return start, end
 
 
-def _run_report(fn, *args):
+def _run_report(fn, key=None, *args):
+    """Run a report. List results are wrapped under `key` so every response is an object."""
     try:
         start, end = _parse_dates()
         result = fn(start, end, *args)
     except OrderError as exc:
         return error_response(exc.code, exc.message, exc.status)
-    return success_response("Report retrieved", result)
+    data = {key: result} if key else result
+    return success_response("Report retrieved", data)
 
 
 @reports_bp.get("/overview")
@@ -56,7 +58,7 @@ def overview():
 @login_required
 @roles_required(UserRole.ADMIN)
 def sales():
-    return _run_report(report_sales)
+    return _run_report(report_sales, "days")
 
 
 @reports_bp.get("/popular-items")
@@ -69,21 +71,29 @@ def popular_items():
             raise ValueError
     except (TypeError, ValueError):
         return error_response("INVALID_PAGINATION", "'limit' must be between 1 and 50.", 400)
-    return _run_report(report_popular_items, limit)
+    return _run_report(report_popular_items, "items", limit)
 
 
 @reports_bp.get("/categories")
 @login_required
 @roles_required(UserRole.ADMIN)
 def categories():
-    return _run_report(report_categories)
+    return _run_report(report_categories, "categories")
 
 
 @reports_bp.get("/peak-hours")
 @login_required
 @roles_required(UserRole.ADMIN)
 def peak_hours():
-    return _run_report(report_peak_hours)
+    try:
+        start, end = _parse_dates()
+        hours = report_peak_hours(start, end)
+    except OrderError as exc:
+        return error_response(exc.code, exc.message, exc.status)
+    return success_response("Report retrieved", {
+        "hours": hours,
+        "timezone_offset_minutes": int(current_app.config["CANTEEN_UTC_OFFSET_MINUTES"]),
+    })
 
 
 @reports_bp.get("/orders")

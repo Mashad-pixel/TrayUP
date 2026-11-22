@@ -1,6 +1,5 @@
 import pytest
 
-from app.extensions import db
 from app.models.order import Order
 from app.models.order_item import OrderItem
 
@@ -50,9 +49,9 @@ def test_frontend_price_fields_are_ignored(client, menu):
         [{
             "menu_item_id": menu["samosa"].id,
             "quantity": 1,
-            "unit_price_paise": 1,  # tampered
+            "unit_price_paise": 1,
         }],
-        total_paise=1,  # tampered
+        total_paise=1,
     )
 
     assert response.status_code == 201
@@ -73,10 +72,10 @@ def test_missing_menu_item_returns_404(client, menu):
     response = post_order(client, [{"menu_item_id": 99999, "quantity": 1}])
 
     assert response.status_code == 404
-    assert response.get_json()["error"]["code"] == "ITEM_NOT_FOUND"
+    assert response.get_json()["error"]["code"] == "MENU_ITEM_NOT_FOUND"
 
 
-@pytest.mark.parametrize("bad_quantity", [0, -1, 21, "2", True, 1.5, None])
+@pytest.mark.parametrize("bad_quantity", [0, -1, "2", True, 1.5, None])
 def test_invalid_quantity_is_rejected(client, menu, bad_quantity):
     response = post_order(
         client,
@@ -85,6 +84,17 @@ def test_invalid_quantity_is_rejected(client, menu, bad_quantity):
 
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "INVALID_QUANTITY"
+    assert Order.query.count() == 0
+
+
+def test_quantity_above_limit_is_rejected(client, menu):
+    response = post_order(
+        client,
+        [{"menu_item_id": menu["samosa"].id, "quantity": 21}],
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "QUANTITY_TOO_LARGE"
     assert Order.query.count() == 0
 
 
@@ -102,17 +112,21 @@ def test_empty_order_is_rejected(client, menu):
     response = post_order(client, [])
 
     assert response.status_code == 400
-    assert response.get_json()["error"]["code"] == "EMPTY_ORDER"
+    assert response.get_json()["error"]["code"] == "INVALID_ITEMS"
+    assert Order.query.count() == 0
 
 
-def test_duplicate_menu_item_is_rejected(client, menu):
+def test_repeated_menu_item_is_combined_into_one_line(client, menu):
     response = post_order(client, [
         {"menu_item_id": menu["samosa"].id, "quantity": 1},
         {"menu_item_id": menu["samosa"].id, "quantity": 2},
     ])
 
-    assert response.status_code == 400
-    assert response.get_json()["error"]["code"] == "DUPLICATE_ITEM"
+    assert response.status_code == 201
+    data = response.get_json()["data"]
+    assert len(data["items"]) == 1
+    assert data["items"][0]["quantity"] == 3
+    assert data["total_paise"] == 4500
 
 
 def test_invalid_idempotency_key_is_rejected(client, menu):

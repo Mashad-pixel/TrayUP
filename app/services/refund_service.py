@@ -1,6 +1,5 @@
 from datetime import timezone
 
-from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models.order import Order, PaymentStatus
@@ -116,19 +115,25 @@ def _update_refund(refund, status):
 
 def handle_refund_processed_event(entity):
     provider_refund_id = entity.get("id")
+    if not provider_refund_id:
+        return "ignored"  # Malformed event. Retrying would not help.
     refund = _refund_by_provider_id(provider_refund_id)
     if refund is None:
         # The webhook may beat our request transaction. Raising asks Razorpay to retry later.
         raise OrderError("REFUND_NOT_FOUND", "Refund record is not available yet. Retry webhook.", 404)
     _update_refund(refund, RefundStatus.PROCESSED)
+    return "processed"
 
 
 def handle_refund_failed_event(entity):
     provider_refund_id = entity.get("id")
+    if not provider_refund_id:
+        return "ignored"
     refund = _refund_by_provider_id(provider_refund_id)
     if refund is None:
         raise OrderError("REFUND_NOT_FOUND", "Refund record is not available yet. Retry webhook.", 404)
     _update_refund(refund, RefundStatus.FAILED)
+    return "processed"
 
 
 def reconcile_refund_status(payment_id):
