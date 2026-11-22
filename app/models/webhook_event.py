@@ -28,6 +28,7 @@ class WebhookEvent(db.Model):
         default=WebhookStatus.RECEIVED,
         index=True,
     )
+    last_error = db.Column(db.String(500), nullable=True)
 
     received_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     processed_at = db.Column(db.DateTime(timezone=True), nullable=True)

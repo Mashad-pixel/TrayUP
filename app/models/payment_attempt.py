@@ -5,6 +5,9 @@ from app.models.order import utcnow
 class AttemptStatus:
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    SUCCESS = SUCCEEDED
+    SIGNATURE_FAILED = "signature_failed"
+    REFUND_REQUIRED = "refund_required"
 
 
 class PaymentAttempt(db.Model):

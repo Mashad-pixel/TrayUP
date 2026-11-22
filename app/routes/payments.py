@@ -124,7 +124,7 @@ def razorpay_webhook():
         return error_response("INVALID_EVENT", "Webhook event type is missing.", 400)
 
     try:
-        outcome = process_webhook(event_id, event_type, raw_body, payload)
+        outcome = process_webhook(raw_body, signature, event_id, payload)
     except Exception:
         # 500 makes Razorpay retry the delivery.
         current_app.logger.exception("Webhook processing failed for event %s", event_id)

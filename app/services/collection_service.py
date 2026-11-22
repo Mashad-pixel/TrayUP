@@ -171,3 +171,14 @@ def confirm_collection(raw_token, staff_user_id):
     except Exception:
         db.session.rollback()
         raise
+
+
+def expire_collection_tokens(order_id, now=None):
+    """Stop every active collection token for an order."""
+    now = now or utcnow()
+    (
+        CollectionToken.query.filter(
+            CollectionToken.order_id == order_id,
+            CollectionToken.used_at.is_(None),
+        ).update({"used_at": now}, synchronize_session=False)
+    )

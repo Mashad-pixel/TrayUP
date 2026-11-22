@@ -281,3 +281,12 @@ def order_statistics(start, end):
         "by_order_status": by_order_status,
         "by_payment_status": by_payment_status,
     }
+
+
+# Public report-service names used by the API routes.
+report_overview = overview
+report_sales = sales_by_day
+report_popular_items = popular_items
+report_categories = category_sales
+report_peak_hours = peak_hours
+report_orders = order_statistics

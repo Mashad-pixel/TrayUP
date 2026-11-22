@@ -45,17 +45,34 @@ def verify_webhook_signature(raw_body, signature):
 
 
 def _record_attempt(payment_id, outcome, provider_payment_id=None, error_code=None, message=None):
+    payment = db.session.get(Payment, payment_id)
+    if payment is None:
+        return
+    attempt_number = (
+        PaymentAttempt.query.filter_by(order_id=payment.order_id).count() + 1
+    )
     db.session.add(PaymentAttempt(
-        payment_id=payment_id,
-        outcome=outcome,
+        order_id=payment.order_id,
+        provider_order_id=payment.provider_order_id,
+        attempt_number=attempt_number,
+        status=outcome,
         provider_payment_id=provider_payment_id,
-        error_code=error_code,
-        message=message,
+        failure_reason=message or error_code,
     ))
 
 
-def _confirm_captured_payment(payment, provider_payment_id, amount_paise, currency):
+def _confirm_captured_payment(
+    payment=None,
+    provider_payment_id=None,
+    amount_paise=None,
+    currency=None,
+    provider_order_id=None,
+):
     """Confirm a captured payment. Idempotent for the same provider payment ID."""
+    if payment is None:
+        payment = Payment.query.filter_by(provider_order_id=provider_order_id).first()
+        if payment is None:
+            raise OrderError("PAYMENT_NOT_FOUND", "Payment not found.", 404)
     if amount_paise != payment.amount_paise or currency != payment.currency:
         raise OrderError("PAYMENT_MISMATCH", "Captured amount or currency does not match the order.", 409)
 
@@ -128,6 +145,8 @@ def create_payment_order(internal_order_id, student_id):
     if order.order_status != OrderStatus.PENDING_PAYMENT or order.payment_status != PaymentStatus.PENDING:
         raise OrderError("ORDER_NOT_PAYABLE", "This order is not waiting for payment.", 409)
     if payment_window_closed(order):
+        expire_order(order)
+        db.session.commit()
         raise OrderError("ORDER_EXPIRED", "This order's payment window has expired. Place a new order.", 409)
 
     if order.total_paise < MIN_AMOUNT_PAISE:
@@ -135,7 +154,7 @@ def create_payment_order(internal_order_id, student_id):
 
     existing = Payment.query.filter_by(order_id=order.id, status=PaymentRecordStatus.CREATED).first()
     if existing:
-        return existing
+        return existing, order
 
     client = get_razorpay_client()
     try:
@@ -162,9 +181,9 @@ def create_payment_order(internal_order_id, student_id):
         # A concurrent payment creation may have committed first.
         existing = Payment.query.filter_by(order_id=order.id, status=PaymentRecordStatus.CREATED).first()
         if existing:
-            return existing
+            return existing, order
         raise OrderError("PAYMENT_CREATE_FAILED", "Could not record payment. Please retry.", 500) from exc
-    return payment
+    return payment, order
 
 
 def verify_checkout(order_id, payment_id, signature, student_id):
@@ -229,16 +248,17 @@ def process_webhook(raw_body, signature, event_id, payload):
         raise OrderError("MISSING_EVENT_ID", "Razorpay event ID is required.", 400)
 
     existing = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
-    if existing and existing.status == WebhookStatus.PROCESSED:
+    if existing and existing.processing_status == WebhookStatus.PROCESSED:
         return False
 
     event_type = payload.get("event", "")
     event = existing or WebhookEvent(
         provider_event_id=event_id,
         event_type=event_type,
-        status=WebhookStatus.PROCESSING,
+        payload_hash=hashlib.sha256(raw_body).hexdigest(),
+        processing_status=WebhookStatus.RECEIVED,
     )
-    event.status = WebhookStatus.PROCESSING
+    event.processing_status = WebhookStatus.RECEIVED
     event.last_error = None
     db.session.add(event)
     db.session.flush()
@@ -264,7 +284,7 @@ def process_webhook(raw_body, signature, event_id, payload):
             handle_refund_failed_event(_refund_entity(payload))
         # Unknown event types are recorded and acknowledged. Subscribe only to the events needed.
 
-        event.status = WebhookStatus.PROCESSED
+        event.processing_status = WebhookStatus.PROCESSED
         event.processed_at = utcnow()
         db.session.commit()
         return True
@@ -274,14 +294,15 @@ def process_webhook(raw_body, signature, event_id, payload):
         # Preserve a failed event so Razorpay can retry it (or an operator can inspect it).
         failed = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
         if failed:
-            failed.status = WebhookStatus.FAILED
+            failed.processing_status = WebhookStatus.FAILED
             failed.last_error = str(exc)[:500]
             db.session.commit()
         else:
             failed = WebhookEvent(
                 provider_event_id=event_id,
                 event_type=event_type,
-                status=WebhookStatus.FAILED,
+                payload_hash=hashlib.sha256(raw_body).hexdigest(),
+                processing_status=WebhookStatus.FAILED,
                 last_error=str(exc)[:500],
             )
             db.session.add(failed)

@@ -51,7 +51,7 @@ class TestingConfig(Config):
     # Always empty in tests, even if .env has real keys, so tests never call Razorpay.
     RAZORPAY_KEY_ID = ""
     RAZORPAY_KEY_SECRET = ""
-    RAZORPAY_WEBHOOK_SECRET = ""
+    RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"
 
 
 class ProductionConfig(Config):
