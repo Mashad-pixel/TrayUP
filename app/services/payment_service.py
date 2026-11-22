@@ -34,14 +34,25 @@ def _hmac_signature(secret, message):
 
 def verify_checkout_signature(order_id, payment_id, signature):
     secret = current_app.config["RAZORPAY_KEY_SECRET"]
+    if not secret:
+        raise OrderError("PAYMENTS_NOT_CONFIGURED", "Online payments are not configured on this server.", 503)
     expected = _hmac_signature(secret, f"{order_id}|{payment_id}")
-    return hmac.compare_digest(expected, signature or "")
+    return _signature_matches(expected, signature)
+
+
+def _signature_matches(expected, received):
+    # compare_digest raises TypeError on non-ASCII text, which would turn bad input into a 500.
+    if not isinstance(received, str) or not received.isascii():
+        return False
+    return hmac.compare_digest(expected, received)
 
 
 def verify_webhook_signature(raw_body, signature):
     secret = current_app.config["RAZORPAY_WEBHOOK_SECRET"]
+    if not secret:
+        raise OrderError("WEBHOOKS_NOT_CONFIGURED", "Webhook processing is not configured on this server.", 503)
     expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature or "")
+    return _signature_matches(expected, signature)
 
 
 def _record_attempt(payment_id, outcome, provider_payment_id=None, error_code=None, message=None):
@@ -210,46 +221,94 @@ def verify_checkout(order_id, payment_id, signature, student_id):
     if details.get("status") != "captured":
         raise OrderError("PAYMENT_NOT_CAPTURED", "Payment is not captured yet.", 409)
 
-    return _confirm_captured_payment(
+    payment, refund_required = _confirm_captured_payment(
         payment,
         provider_payment_id=payment_id,
         amount_paise=details.get("amount"),
         currency=details.get("currency"),
     )
+    order = db.session.get(Order, payment.order_id)
+    return order, refund_required
 
 
 def _handle_payment_captured(entity):
     order_id = entity.get("order_id")
     provider_payment_id = entity.get("id")
-    amount = entity.get("amount")
-    currency = entity.get("currency")
 
-    payment = Payment.query.filter_by(provider_order_id=order_id).first()
+    payment = Payment.query.filter_by(provider_order_id=order_id).first() if order_id else None
     if payment is None:
-        # Unknown captured payment. Keep the event failed so Razorpay retries and it can be reconciled.
-        raise OrderError("PAYMENT_NOT_FOUND", "No internal payment matches this Razorpay order.", 404)
+        # A capture for an order this system never created. Acknowledge it so Razorpay
+        # stops retrying. The payment is logged for manual review.
+        current_app.logger.warning(
+            "Captured Razorpay payment %s has no internal order; ignored.", provider_payment_id
+        )
+        return "ignored"
 
-    return _confirm_captured_payment(payment, provider_payment_id, amount, currency)
+    _confirm_captured_payment(
+        payment,
+        provider_payment_id,
+        entity.get("amount"),
+        entity.get("currency"),
+    )
+    return "processed"
+
+
+def _handle_payment_failed(entity):
+    order_id = entity.get("order_id")
+    payment = Payment.query.filter_by(provider_order_id=order_id).first() if order_id else None
+    if payment is None:
+        return "ignored"
+
+    # A late failure must not reverse a successful capture or refund-required payment.
+    if payment.status != PaymentRecordStatus.CREATED:
+        return "ignored"
+
+    _record_attempt(
+        payment.id,
+        AttemptStatus.FAILED,
+        provider_payment_id=entity.get("id"),
+        error_code=entity.get("error_code"),
+        message=entity.get("error_description"),
+    )
+    return "processed"
 
 
 def _event_entity(payload):
-    return payload.get("payload", {}).get("payment", {}).get("entity", {})
+    return ((payload or {}).get("payload") or {}).get("payment", {}).get("entity") or {}
 
 
 def _refund_entity(payload):
-    return payload.get("payload", {}).get("refund", {}).get("entity", {})
+    return ((payload or {}).get("payload") or {}).get("refund", {}).get("entity") or {}
+
+
+def _dispatch_webhook(event_type, payload):
+    """Apply one event. Returns 'processed' or 'ignored'. Raises when a retry is needed."""
+    if event_type == "payment.captured":
+        return _handle_payment_captured(_event_entity(payload))
+    if event_type == "payment.failed":
+        return _handle_payment_failed(_event_entity(payload))
+    if event_type == "refund.processed":
+        return handle_refund_processed_event(_refund_entity(payload))
+    if event_type == "refund.failed":
+        return handle_refund_failed_event(_refund_entity(payload))
+    # Unknown event types are recorded and acknowledged. Subscribe only to the events needed.
+    return "ignored"
 
 
 def process_webhook(raw_body, signature, event_id, payload):
-    """Verify and process one Razorpay webhook. Duplicate event IDs are no-ops."""
+    """Verify and process one Razorpay webhook.
+
+    Returns 'processed', 'ignored', or 'duplicate'. Raises on failure, so the route
+    returns 500 and Razorpay retries the delivery.
+    """
     if not verify_webhook_signature(raw_body, signature):
         raise OrderError("INVALID_WEBHOOK_SIGNATURE", "Webhook signature is invalid.", 400)
     if not event_id:
         raise OrderError("MISSING_EVENT_ID", "Razorpay event ID is required.", 400)
 
     existing = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
-    if existing and existing.processing_status == WebhookStatus.PROCESSED:
-        return False
+    if existing and existing.processing_status in (WebhookStatus.PROCESSED, WebhookStatus.IGNORED):
+        return "duplicate"
 
     event_type = payload.get("event", "")
     event = existing or WebhookEvent(
@@ -264,39 +323,19 @@ def process_webhook(raw_body, signature, event_id, payload):
     db.session.flush()
 
     try:
-        if event_type == "payment.captured":
-            _handle_payment_captured(_event_entity(payload))
-        elif event_type == "payment.failed":
-            entity = _event_entity(payload)
-            payment = Payment.query.filter_by(provider_order_id=entity.get("order_id")).first()
-            # A late failure must not reverse a successful capture or refund-required payment.
-            if payment and payment.status == PaymentRecordStatus.CREATED:
-                _record_attempt(
-                    payment.id,
-                    AttemptStatus.FAILED,
-                    provider_payment_id=entity.get("id"),
-                    error_code=entity.get("error_code"),
-                    message=entity.get("error_description"),
-                )
-        elif event_type == "refund.processed":
-            handle_refund_processed_event(_refund_entity(payload))
-        elif event_type == "refund.failed":
-            handle_refund_failed_event(_refund_entity(payload))
-        # Unknown event types are recorded and acknowledged. Subscribe only to the events needed.
-
-        event.processing_status = WebhookStatus.PROCESSED
+        outcome = _dispatch_webhook(event_type, payload)
+        event.processing_status = outcome
         event.processed_at = utcnow()
         db.session.commit()
-        return True
+        return outcome
 
     except Exception as exc:
         db.session.rollback()
-        # Preserve a failed event so Razorpay can retry it (or an operator can inspect it).
+        # Keep a failed record so Razorpay can retry it, and so an operator can inspect it.
         failed = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
         if failed:
             failed.processing_status = WebhookStatus.FAILED
             failed.last_error = str(exc)[:500]
-            db.session.commit()
         else:
             failed = WebhookEvent(
                 provider_event_id=event_id,
@@ -306,5 +345,5 @@ def process_webhook(raw_body, signature, event_id, payload):
                 last_error=str(exc)[:500],
             )
             db.session.add(failed)
-            db.session.commit()
+        db.session.commit()
         raise

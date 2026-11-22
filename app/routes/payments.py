@@ -7,6 +7,8 @@ from app.extensions import csrf, limiter
 from app.responses import error_response, success_response
 from app.services.errors import OrderError
 from app.services.payment_service import (
+    LATE_PAYMENT_CODE,
+    LATE_PAYMENT_MESSAGE,
     create_payment_order,
     process_webhook,
     verify_checkout,
@@ -75,14 +77,17 @@ def verify_payment_route():
         )
 
     try:
-        order = verify_checkout(
-            current_user.id,
-            razorpay_order_id,
-            razorpay_payment_id,
-            razorpay_signature,
+        order, refund_required = verify_checkout(
+            order_id=razorpay_order_id,
+            payment_id=razorpay_payment_id,
+            signature=razorpay_signature,
+            student_id=current_user.id,
         )
     except OrderError as exc:
         return _order_error(exc)
+
+    if refund_required:
+        return error_response(LATE_PAYMENT_CODE, LATE_PAYMENT_MESSAGE, 409)
 
     return success_response("Payment verified", {
         "order_id": order.id,
