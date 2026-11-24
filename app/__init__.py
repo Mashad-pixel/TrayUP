@@ -11,6 +11,7 @@ from app.routes.admin import admin_bp
 from app.routes.admin_orders import admin_orders_bp
 from app.routes.admin_refunds import admin_refunds_bp
 from app.routes.auth import auth_bp
+from app.routes.frontend import frontend_bp
 from app.routes.kitchen import kitchen_bp
 from app.routes.orders import orders_bp
 from app.routes.payments import payments_bp
@@ -75,6 +76,7 @@ def create_app(config_name="development"):
     limiter.init_app(app)
     login_manager.init_app(app)
 
+    app.register_blueprint(frontend_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(auth_bp)
