@@ -1,4 +1,5 @@
-# trayUP
+# trayUP --TWO major problems facing right now
+||Payment and || location we do not need students who are now physically present cannot order
 ### Smart College Canteen — QR-Based Online Ordering & Payment System
 
 trayUP is a mobile-first web application for college canteens. Students scan a QR code to browse the menu, place food orders, pay online, and track preparation. Kitchen staff manage incoming paid orders and verify collection, while administrators manage menu items, staff, orders, and sales.

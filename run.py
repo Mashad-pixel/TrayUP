@@ -5,4 +5,4 @@ from app import create_app
 app = create_app(os.getenv("FLASK_CONFIG", "development"))
 
 if __name__ == "__main__":
-    app.run()
+    app.run(port=8000)
