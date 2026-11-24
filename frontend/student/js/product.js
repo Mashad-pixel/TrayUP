@@ -42,7 +42,7 @@
   const thumbnails = document.getElementById("product-gallery-thumbnails");
   let activeImage = 0;
 
-  document.title = `${product.name} — trayUP`;
+  document.title = `${product.name} — TrayUP`;
   document.getElementById("product-category").textContent = product.category;
   document.getElementById("breadcrumb-name").textContent = product.name;
   document.getElementById("product-category-label").textContent = product.category;

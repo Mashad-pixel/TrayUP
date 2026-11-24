@@ -38,7 +38,7 @@
           amount: details.amount_paise,
           currency: details.currency || "INR",
           order_id: details.razorpay_order_id,
-          name: window.TRAYUP_CONFIG?.appName || "trayUP",
+          name: window.TRAYUP_CONFIG?.appName || "TrayUP",
           description: details.order_number ? `Order ${details.order_number}` : "Canteen order",
           prefill: {
             name: student?.name || "",

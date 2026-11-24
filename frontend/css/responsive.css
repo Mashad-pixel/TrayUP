@@ -17,7 +17,11 @@
   .brand { font-size: 20px; }
   .brand span:last-child { display: none; }
   .brand-mark { width: 30px; height: 30px; }
-  .search { grid-column: 1 / -1; grid-row: 2; height: 42px; display: none; }
+  .search { grid-column: 1 / -1; grid-row: 2; height: 52px; margin: 8px 0 14px; }
+  .search input { font-size: 14px; }
+  .search-placeholder { font-size: 17px; }
+  .search-sticker { width: 44px; height: 44px; border-radius: 14px; }
+  .search-sticker svg { width: 28px; height: 28px; }
   .nav-actions { grid-column: 3; }
   .nav-actions .primary,
   .nav-actions .sign-link,

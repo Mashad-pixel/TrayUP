@@ -123,7 +123,7 @@
         els.mainPanel.hidden = true;
         els.accountMessage.textContent = "Students need an account to order. Log in, then scan the canteen code again.";
       } else {
-        setConnection(false, "Can't reach trayUP. Check your connection.");
+        setConnection(false, "Can't reach TrayUP. Check your connection.");
       }
     }
   }
@@ -213,7 +213,7 @@
     if (error.status === 403 && error.code === "FORBIDDEN") return "Only student accounts can verify presence.";
     if (error.status === 429) return "Too many attempts. Wait a minute and try again.";
     if (error.code && CODE_MESSAGES[error.code]) return CODE_MESSAGES[error.code];
-    if (error.status === undefined) return "Can't reach trayUP. Check your connection and try again.";
+    if (error.status === undefined) return "Can't reach TrayUP. Check your connection and try again.";
     return error.message || "Verification failed. Try again.";
   }
 

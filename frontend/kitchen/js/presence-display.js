@@ -84,7 +84,7 @@
         els.message.appendChild(link);
         return false;
       }
-      setConnection(false, "Can't reach trayUP");
+      setConnection(false, "Can't reach TrayUP");
       return false;
     }
   }
