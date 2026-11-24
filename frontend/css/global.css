@@ -17,7 +17,7 @@ body {
   background-color: transparent;
   background-image: url("../assets/food-doodle-pattern.svg");
   background-repeat: repeat;
-  background-size: 900px 900px;
+  background-size: 500px 500px;
   background-position: 0 0;
   color: var(--ink);
   font-family: var(--sans);
