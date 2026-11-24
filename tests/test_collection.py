@@ -10,7 +10,7 @@ from app.models.collection_token import CollectionToken
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_status_history import OrderStatusHistory
 from app.models.user import User, UserRole
-from presence_helpers import create_order_for as create_order
+from app.services.order_service import create_order
 from app.services.payment_service import _confirm_captured_payment, create_payment_order
 
 

@@ -132,10 +132,6 @@
   }
 
   async function load() {
-    if (window.TRAYUP_CONFIG?.demoMode !== false) {
-      renderDemoOrders();
-      return;
-    }
     try {
       const response = await trayApi.get("/orders");
       const orders = response?.data?.orders || [];

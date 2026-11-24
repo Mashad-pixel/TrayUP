@@ -10,7 +10,7 @@ from app.models.payment import Payment, PaymentRecordStatus
 from app.models.payment_attempt import PaymentAttempt
 from app.models.user import User, UserRole
 from app.models.webhook_event import WebhookEvent, WebhookStatus
-from presence_helpers import create_order_for as create_order
+from app.services.order_service import create_order
 from app.services.payment_service import create_payment_order
 
 KEY_ID = "rzp_test_key_id"

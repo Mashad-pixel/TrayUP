@@ -3,7 +3,7 @@ import pytest
 from app.extensions import db
 from app.models.order import Order, OrderStatus
 from app.models.user import User, UserRole
-from presence_helpers import create_order_for as create_order
+from app.services.order_service import create_order
 
 
 def make_user(email, role=UserRole.STUDENT, name="Test User"):

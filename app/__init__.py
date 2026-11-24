@@ -4,7 +4,7 @@ from flask_wtf.csrf import CSRFError
 from app.responses import error_response
 
 from app.cli import register_cli
-from app.config import DEV_SECRET_KEY, config_map, validate_runtime_settings
+from app.config import DEV_SECRET_KEY, config_map
 from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.models.user import User
 from app.routes.admin import admin_bp
@@ -12,10 +12,8 @@ from app.routes.admin_orders import admin_orders_bp
 from app.routes.admin_refunds import admin_refunds_bp
 from app.routes.auth import auth_bp
 from app.routes.kitchen import kitchen_bp
-from app.routes.frontend import frontend_bp
 from app.routes.orders import orders_bp
 from app.routes.payments import payments_bp
-from app.routes.presence import presence_bp
 from app.routes.public import public_bp
 from app.routes.reports import reports_bp
 
@@ -55,9 +53,6 @@ def create_app(config_name="development"):
     if config_name == "production" and app.config["SECRET_KEY"] == DEV_SECRET_KEY:
         raise RuntimeError("Set a real SECRET_KEY in the environment before running in production.")
 
-    # Fails closed: production will not start without canteen coordinates and an https PUBLIC_BASE_URL.
-    validate_runtime_settings(app.config, config_name)
-
     db.init_app(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
@@ -89,8 +84,6 @@ def create_app(config_name="development"):
     app.register_blueprint(payments_bp)
     app.register_blueprint(admin_refunds_bp)
     app.register_blueprint(reports_bp)
-    app.register_blueprint(presence_bp)
-    app.register_blueprint(frontend_bp)
 
     register_cli(app)
 

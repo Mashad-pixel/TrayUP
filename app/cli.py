@@ -4,7 +4,6 @@ from flask.cli import with_appcontext
 from app.extensions import db
 from app.models.user import User, UserRole
 from app.services.order_service import expire_unpaid_orders
-from app.services.presence_service import prune_presence_records
 
 MIN_PASSWORD_LENGTH = 8
 
@@ -59,21 +58,6 @@ def expire_orders_command():
     click.echo(f"Expired {count} unpaid order(s).")
 
 
-@click.command("prune-presence")
-@with_appcontext
-def prune_presence_command():
-    """Delete presence verification records older than PRESENCE_RETENTION_DAYS.
-
-    Run daily (cron or Task Scheduler). Keeps the audit trail for the retention window only.
-    """
-    counts = prune_presence_records()
-    click.echo(
-        f"Removed {counts['tokens']} token(s), {counts['redemptions']} redemption(s) "
-        f"and {counts['sessions']} session(s)."
-    )
-
-
 def register_cli(app):
     app.cli.add_command(create_user_command)
     app.cli.add_command(expire_orders_command)
-    app.cli.add_command(prune_presence_command)
