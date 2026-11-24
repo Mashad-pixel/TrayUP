@@ -10,6 +10,7 @@ from app.models.payment_attempt import AttemptStatus, PaymentAttempt
 from app.models.webhook_event import WebhookEvent, WebhookStatus
 from app.models.stock_reservation import ReservationStatus, StockReservation
 from app.models.refund import Refund, RefundStatus
+from app.models.presence import PresenceRedemption, PresenceSession, PresenceToken
 
 __all__ = [
     "User",
@@ -32,4 +33,7 @@ __all__ = [
     "ReservationStatus",
     "Refund",
     "RefundStatus",
+    "PresenceToken",
+    "PresenceRedemption",
+    "PresenceSession",
 ]

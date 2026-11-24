@@ -15,6 +15,7 @@ from app.services.canteen_service import is_accepting_orders
 from app.services.errors import OrderError
 from app.services.inventory_service import release_reservations, reserve_stock, return_sold_stock
 from app.services.pricing_service import normalize_requested_items, price_order
+from app.services.presence_service import consume_presence_session, load_presence_session_for_order
 from app.services.time_utils import as_utc, utcnow
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 64
@@ -115,11 +116,14 @@ def _sweep_expired_orders_safely():
         current_app.logger.exception("Could not expire unpaid orders before creating a new order.")
 
 
-def create_order(student_id, raw_items, idempotency_key=None):
-    """Create a pending_payment order and reserve its stock in one transaction.
+def create_order(student_id, raw_items, idempotency_key=None, *, presence_session_token):
+    """Create a pending_payment order, reserve its stock and consume the presence session.
 
-    Returns (order, raw_tracking_token). raw_tracking_token is None when an existing
-    order is returned for a retried key, because the raw token was shown the first time.
+    `presence_session_token` is required (keyword-only), so no caller can create an order
+    without a verification. The session is marked used in the same transaction as the order.
+
+    Returns (order, raw_tracking_token). raw_tracking_token is None when an existing order is
+    returned for a retried key, because the raw token was shown the first time.
     """
     key = _validate_idempotency_key(idempotency_key)
 
@@ -129,6 +133,9 @@ def create_order(student_id, raw_items, idempotency_key=None):
             return existing, None
 
     requested = normalize_requested_items(raw_items)
+
+    # Read-only verification check first, so bad sessions fail before any state changes.
+    presence_session_id = load_presence_session_for_order(presence_session_token, student_id, utcnow())
 
     if not is_accepting_orders():
         raise OrderError(
@@ -168,7 +175,9 @@ def create_order(student_id, raw_items, idempotency_key=None):
 
     try:
         db.session.add(order)
-        db.session.flush()  # Assigns order.id, which the stock reservations need.
+        db.session.flush()  # Assigns order.id, which the stock reservations and session link need.
+        # Conditional update inside this transaction. If it fails, the order and holds roll back.
+        consume_presence_session(presence_session_id, student_id, order.id, utcnow())
         reserve_stock(order.id, priced.lines)
         db.session.commit()
     except IntegrityError:
@@ -184,7 +193,7 @@ def create_order(student_id, raw_items, idempotency_key=None):
             500,
         )
     except Exception:
-        # Also covers OrderError from reserve_stock. The order and any partial holds are rolled back.
+        # Also covers OrderError from the presence session or reserve_stock.
         db.session.rollback()
         raise
 

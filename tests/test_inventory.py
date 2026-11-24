@@ -16,7 +16,8 @@ from app.models.payment import Payment, PaymentRecordStatus
 from app.models.stock_reservation import ReservationStatus, StockReservation
 from app.models.user import User, UserRole
 from app.services.errors import OrderError
-from app.services.order_service import create_order, expire_unpaid_orders
+from app.services.order_service import expire_unpaid_orders
+from presence_helpers import create_order_for as create_order
 from app.services.payment_service import _confirm_captured_payment, create_payment_order
 
 WEBHOOK_SECRET = "test_webhook_secret"

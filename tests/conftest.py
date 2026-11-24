@@ -6,6 +6,7 @@ from app import create_app
 from app.extensions import db
 from app.models.menu import MenuItem
 from app.models.user import User
+from presence_helpers import issue_test_presence_session
 
 
 class IsolatedClient(FlaskClient):
@@ -21,10 +22,33 @@ class IsolatedClient(FlaskClient):
         return super().open(*args, **kwargs)
 
 
+class PresenceAwareClient(IsolatedClient):
+    """Test client that gives a logged-in student a fresh verified session for each order POST.
+
+    Pricing, stock and payment tests are about their own rules, so they get a valid
+    verification automatically. Real verification is covered in tests/test_presence.py. Set
+    `auto_presence = False` on a client to test the verification rules directly.
+    """
+
+    auto_presence = True
+
+    def post(self, *args, **kwargs):
+        path = args[0] if args else kwargs.get("path", "")
+        if self.auto_presence and path == "/api/orders":
+            headers = dict(kwargs.get("headers") or {})
+            if "X-Presence-Session" not in headers:
+                with self.session_transaction() as sess:
+                    user_id = sess.get("_user_id")
+                if user_id is not None:
+                    headers["X-Presence-Session"] = issue_test_presence_session(int(user_id))
+                    kwargs["headers"] = headers
+        return super().post(*args, **kwargs)
+
+
 @pytest.fixture
 def app():
     app = create_app("testing")
-    app.test_client_class = IsolatedClient
+    app.test_client_class = PresenceAwareClient
 
     with app.app_context():
         db.create_all()

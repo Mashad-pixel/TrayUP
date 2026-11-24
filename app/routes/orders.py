@@ -2,7 +2,10 @@ from flask import Blueprint, request
 from flask_login import current_user, login_required
 
 from app.extensions import limiter
+from app.models.user import UserRole
 from app.responses import error_response, success_response
+from app.security.permissions import roles_required
+from app.security.rate_limit import user_rate_key
 from app.services.collection_service import as_utc, get_student_collection_qr
 from app.services.errors import OrderError
 from app.services.order_query_service import (
@@ -23,17 +26,24 @@ def _order_error(exc):
 
 @orders_bp.route("", methods=["POST"])
 @login_required
-@limiter.limit("10 per minute")
+@roles_required(UserRole.STUDENT)
+@limiter.limit("10 per minute", key_func=user_rate_key)
 def create_order_route():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
+
+    # Single-use proof of a recent QR + GPS check. Verified and consumed inside create_order().
+    presence_session_token = request.headers.get("X-Presence-Session")
+    if presence_session_token is not None:
+        presence_session_token = presence_session_token.strip()
 
     try:
         order, raw_token = create_order(
             student_id=current_user.id,
             raw_items=payload.get("items"),
             idempotency_key=request.headers.get("Idempotency-Key"),
+            presence_session_token=presence_session_token,
         )
     except OrderError as exc:
         return _order_error(exc)
