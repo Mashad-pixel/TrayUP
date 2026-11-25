@@ -4,9 +4,9 @@
   document.getElementById("app-header").innerHTML = trayComponents.header("My Orders");
 
   // Only known student pages may be used as a return destination. This prevents open redirects.
-  const RETURN_PAGES = { "verify.html": "./verify.html", "checkout.html": "./checkout.html", "cart.html": "./cart.html" };
+  const RETURN_PAGES = { "checkout.html": "./checkout.html", "cart.html": "./cart.html" };
   const params = new URLSearchParams(window.location.search);
-  const returnTo = RETURN_PAGES[params.get("next")] || "./verify.html";
+  const returnTo = RETURN_PAGES[params.get("next")] || "../index.html";
 
   const $ = (id) => document.getElementById(id);
   const tabLogin = $("tab-login");

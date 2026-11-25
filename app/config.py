@@ -29,6 +29,7 @@ class Config:
     RATELIMIT_ENABLED = True
     # In-memory storage is fine locally. Use Redis in production (multiple workers share counts).
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+    REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "20 per hour; 100 per day")
 
     ORDER_PAYMENT_EXPIRY_MINUTES = int(os.getenv("ORDER_PAYMENT_EXPIRY_MINUTES", "10"))
     COLLECTION_TOKEN_EXPIRY_MINUTES = int(os.getenv("COLLECTION_TOKEN_EXPIRY_MINUTES", "60"))

@@ -4,15 +4,15 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <title>Student sign in — trayUP</title>
-<link rel="stylesheet" href="../css/global.css"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/student.css"><link rel="stylesheet" href="../css/responsive.css"><link rel="stylesheet" href="../css/presence.css">
+<link rel="stylesheet" href="../css/global.css"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/student.css"><link rel="stylesheet" href="../css/responsive.css">
 </head>
 <body class="student-page">
 <div id="app-header"></div>
-<main class="container presence-page" style="max-width:460px">
+<main class="container" style="max-width:460px;padding-top:28px">
   <h1>Student account</h1>
-  <p class="presence-lede">Log in to order food at the canteen. You'll verify that you're at the canteen before each order.</p>
+  <p style="color:var(--muted);margin:12px 0 20px">Sign in or create a student account to browse the menu, place orders, and track them.</p>
 
-  <section class="card presence-card">
+  <section class="card">
     <div class="auth-tabs" role="tablist">
       <button type="button" role="tab" id="tab-login" aria-selected="true" aria-controls="login-form">Log in</button>
       <button type="button" role="tab" id="tab-register" aria-selected="false" aria-controls="register-form">Create account</button>
@@ -29,7 +29,7 @@
       <div class="field"><label for="register-email">Email</label><input id="register-email" type="email" required autocomplete="email" maxlength="120"></div>
       <div class="field"><label for="register-password">Password (at least 8 characters)</label><input id="register-password" type="password" required autocomplete="new-password" minlength="8" maxlength="128"></div>
       <button class="btn btn-primary" type="submit" style="width:100%">Create account</button>
-      <p style="color:var(--muted);font-size:13px;margin-top:12px;line-height:1.45">We use your name and email to identify your orders. Location is checked only when you verify at the canteen, as explained on the verification page.</p>
+      <p style="color:var(--muted);font-size:13px;margin-top:12px;line-height:1.45">Your account details help identify your orders and receipts.</p>
     </form>
   </section>
 </main>

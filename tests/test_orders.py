@@ -2,6 +2,8 @@ import pytest
 
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.user import User
+from app.extensions import db
 
 
 def post_order(client, items, key=None, **extra):
@@ -157,4 +159,23 @@ def test_requires_login(anon_client, menu):
     response = post_order(anon_client, [{"menu_item_id": menu["samosa"].id, "quantity": 1}])
 
     assert response.status_code in (302, 401)
+    assert Order.query.count() == 0
+
+
+
+def test_non_student_cannot_create_order(app, menu):
+    staff = User(name="Kitchen Staff", email="kitchen-role-test@example.com", role="KITCHEN", is_active=True)
+    staff.set_password("StrongPass123!")
+    db.session.add(staff)
+    db.session.commit()
+
+    staff_client = app.test_client()
+    with staff_client.session_transaction() as session:
+        session["_user_id"] = str(staff.id)
+        session["_fresh"] = True
+
+    response = post_order(staff_client, [{"menu_item_id": menu["samosa"].id, "quantity": 1}])
+
+    assert response.status_code == 403
+    assert response.get_json()["error"]["code"] == "FORBIDDEN"
     assert Order.query.count() == 0
