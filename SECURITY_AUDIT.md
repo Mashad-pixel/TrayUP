@@ -73,9 +73,9 @@ No high-confidence secret pattern was confirmed in the scanned `main` history. T
    cd TrayUP-rewrite.git
    python -m pip install git-filter-repo
    ```
-2. Create a replacement file containing the previously committed URL and a safe marker (the value below is the Firebase database endpoint, not a private key):
+2. Obtain the old endpoint from a trusted local backup or credential manager and place it in `../private-old-firebase-url.txt` with restrictive permissions (`chmod 600`). Do not put the endpoint in shell history, logs, reports, or Git. Create a replacement file containing that local-only value and a safe marker:
    ```bash
-   OLD_FIREBASE_URL='https://trayup-36abb-default-rtdb.asia-southeast1.firebasedatabase.app/'
+   OLD_FIREBASE_URL="$(cat ../private-old-firebase-url.txt)"  # local-only file; never commit or print its contents
    printf '%s==>FIREBASE_DATABASE_URL_REMOVED\n' "$OLD_FIREBASE_URL" > ../trayup-replacements.txt
    git filter-repo --replace-text ../trayup-replacements.txt
    ```
