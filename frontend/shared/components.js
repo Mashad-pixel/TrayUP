@@ -13,6 +13,7 @@
   window.trayComponents = {
     header(active = "") {
       const wrapSearchField = document.body.classList.contains("home-page");
+      const loginNext = window.location.pathname.endsWith("/student/checkout.html") ? "?next=checkout.html" : "";
       return `
         <header class="top-strip">
           <div class="container nav-main">
@@ -47,7 +48,7 @@
               <button class="cart-btn" id="open-cart" type="button" aria-label="Open cart">🛒
                 <span class="cart-count" id="cart-count">0</span>
               </button>
-              <a class="login-link" href="${siteUrl("loginpage.html")}" aria-label="Log in to your TrayUP account">
+              <a class="login-link" href="${siteUrl("loginpage.html")}${loginNext}" aria-label="Log in to your TrayUP account">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <circle cx="12" cy="8" r="3.25"></circle>
                   <path d="M5.5 19a6.5 6.5 0 0 1 13 0"></path>
