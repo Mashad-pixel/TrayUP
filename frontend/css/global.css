@@ -48,15 +48,26 @@ a { color: inherit; text-decoration: none; }
 .nav-main {
   min-height: 74px;
   display: grid;
-  grid-template-columns: auto minmax(400px, 620px) auto;
+  grid-template-columns: 1fr minmax(360px, 520px) 1fr;
   align-items: center;
   gap: 28px;
+}
+
+.nav-main > .search {
+  grid-column: 2;
+  width: 100%;
+  max-width: 520px;
+  justify-self: center;
+}
+
+.nav-main > .nav-actions {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
   font-family: var(--sans);
   font-size: 24px;
   font-weight: 800;
@@ -141,8 +152,7 @@ a { color: inherit; text-decoration: none; }
   );
 }
 
-.search:has(input:not(:placeholder-shown)) .search-placeholder,
-.search:has(input:focus) .search-placeholder {
+.search:has(input:not(:placeholder-shown)) .search-placeholder {
   visibility: hidden;
 }
 

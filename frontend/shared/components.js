@@ -16,7 +16,7 @@
         <header class="top-strip">
           <div class="container nav-main">
             <a class="brand" href="${siteUrl("index.html")}" aria-label="TrayUP home">
-              <span class="brand-mark"></span><span>TrayUP</span>
+              <span>TrayUP</span>
             </a>
             <form class="search" role="search">
               <span class="search-sticker search-sticker-fork" aria-hidden="true">
