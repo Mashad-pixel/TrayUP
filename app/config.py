@@ -40,10 +40,13 @@ class Config:
         "FIREBASE_DATABASE_URL",
         "https://trayup-36abb-default-rtdb.asia-southeast1.firebasedatabase.app/",
     )
-    FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv(
+    _firebase_service_account_path = os.getenv(
         "FIREBASE_SERVICE_ACCOUNT_PATH",
-        os.path.join(BASE_DIR, "serviceAccountKey.json"),
+        "serviceAccountKey.json",
     )
+    if not os.path.isabs(_firebase_service_account_path):
+        _firebase_service_account_path = os.path.join(BASE_DIR, _firebase_service_account_path)
+    FIREBASE_SERVICE_ACCOUNT_PATH = os.path.abspath(_firebase_service_account_path)
 
 
 class DevelopmentConfig(Config):
