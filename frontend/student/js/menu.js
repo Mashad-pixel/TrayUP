@@ -362,7 +362,6 @@
     const cart = getCart();
     const quantity = cart.reduce((sum, item) => sum + item.qty, 0);
     document.getElementById("cart-count").textContent = quantity;
-    document.getElementById("mobile-cart-count").textContent = quantity;
     document.getElementById("cart-total").textContent = rupees(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
     document.getElementById("cart-items").innerHTML = cart.length ? cart.map((item) => `
       <div class="cart-item">

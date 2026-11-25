@@ -152,16 +152,6 @@
     font-weight: 800;
   }
   .home-page .mobile-dock span { font-size: 17px; }
-  .home-page .mobile-dock b {
-    display: grid;
-    min-width: 20px;
-    height: 20px;
-    place-items: center;
-    border-radius: 50%;
-    background: var(--orange);
-    color: var(--ink);
-    font-size: 10px;
-  }
 }
 
 @media (max-width: 370px) {
