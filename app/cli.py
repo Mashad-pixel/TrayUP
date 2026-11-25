@@ -88,21 +88,35 @@ def seed_demo_command():
             payment_provider="sandbox",
             merchant_display_name="Campus Canteen",
             upi_vpa="canteen@ybl",
-            cash_enabled=True,
+            cash_enabled=False,
             cash_max_order_paise=20000,
         )
         db.session.add(settings)
         click.echo("Created default CanteenSettings")
 
     if MenuItem.query.count() == 0:
+        from app.seed_data import DEMO_PRODUCTS
+
         demo_items = [
-            MenuItem(name="Masala Dosa", category="Breakfast", price_paise=5000, is_available=True),
-            MenuItem(name="Veg Burger", category="Fast Food", price_paise=6000, is_available=True, stock_quantity=20),
-            MenuItem(name="Cold Coffee", category="Beverages", price_paise=4000, is_available=True),
-            MenuItem(name="Samosa (2 pcs)", category="Snacks", price_paise=3000, is_available=True, stock_quantity=50),
+            MenuItem(
+                id=item["id"],
+                name=item["name"],
+                category=item["category"],
+                price_paise=item["price_paise"],
+                description=item["description"],
+                image_url=item["image_url"],
+                is_available=True,
+            )
+            for item in DEMO_PRODUCTS
         ]
         db.session.add_all(demo_items)
-        click.echo("Added 4 demo menu items")
+        db.session.flush()
+
+        if db.session.bind and db.session.bind.dialect.name == "postgresql":
+            db.session.execute(
+                db.text("SELECT setval(pg_get_serial_sequence('menu_items', 'id'), COALESCE(MAX(id), 1)) FROM menu_items;")
+            )
+        click.echo(f"Added {len(demo_items)} demo menu items")
 
     db.session.commit()
     click.echo("Demo data seeded successfully.")
