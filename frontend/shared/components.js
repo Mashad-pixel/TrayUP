@@ -34,6 +34,13 @@
                 <span class="search-sticker search-sticker-chef" aria-hidden="true">
                   <svg viewBox="0 0 48 48"><path d="M10 22c-5-1-7-7-3-11 3-3 7-2 10 0 1-6 10-7 13-2 5-2 11 2 10 8 4 1 6 5 4 9-2 5-7 6-12 4H16c-5 1-9-3-6-8zM13 31h25l-2 11H15l-2-11z" fill="currentColor"/><path d="M33 33l1.5 4L39 38l-3.5 3L36 45l-4-2-4 2 1-4-3-3 4-1z" fill="#fff"/></svg>
                 </span>
+                ${wrapSearchField ? `
+                <span class="search-sticker search-sticker-taco" aria-hidden="true">
+                  <svg viewBox="0 0 48 48"><path d="M5 31c1-14 8-23 19-23s18 9 19 23H5z" fill="currentColor"/><path d="M10 27c2-8 7-13 14-13s12 5 14 13" fill="none" stroke="#fff" stroke-width="3"/><circle cx="18" cy="21" r="1.5" fill="#fff"/><circle cx="25" cy="18" r="1.5" fill="#fff"/><circle cx="31" cy="22" r="1.5" fill="#fff"/></svg>
+                </span>
+                <span class="search-sticker search-sticker-drink" aria-hidden="true">
+                  <svg viewBox="0 0 48 48"><path d="M12 17h26l-4 27H16l-4-27z" fill="currentColor"/><path d="M19 18l7-13 4 2-7 13M15 26h20" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>` : ""}
                 <span class="search-icon" aria-hidden="true"></span>
                 <span class="search-placeholder" aria-hidden="true">
                   Search <span class="bitten-word">for a bite</span>...
