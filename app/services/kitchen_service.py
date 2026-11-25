@@ -5,6 +5,7 @@ from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_status_history import OrderStatusHistory
 from app.services.collection_service import issue_collection_token
 from app.services.errors import OrderError
+from app.services.firebase_service import sync_order_to_firebase
 
 KITCHEN_QUEUE_STATUSES = (
     OrderStatus.RECEIVED,
@@ -159,7 +160,10 @@ def change_order_status(order_id, new_status, staff_user_id):
             issue_collection_token(order_id)
 
         db.session.commit()
-        return db.session.get(Order, order_id)
+        updated_order = db.session.get(Order, order_id)
+        if updated_order is not None:
+            sync_order_to_firebase(updated_order)
+        return updated_order
 
     except Exception:
         db.session.rollback()
