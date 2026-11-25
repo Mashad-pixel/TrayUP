@@ -65,7 +65,7 @@ class TestingConfig(Config):
     RATELIMIT_ENABLED = False
     RATELIMIT_STORAGE_URI = "memory://"
     RAZORPAY_KEY_ID = ""
-    RAZORPAY_KEY_SECRET = ""
+    RAZORPAY_KEY_SECRET = ""  # nosec B105 - intentionally empty in tests; never a usable credential.
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"  # nosec B105
     FIREBASE_ENABLED = False
 
