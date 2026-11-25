@@ -152,13 +152,13 @@ def test_refund_webhook_arriving_before_refund_record_is_saved(app, student, men
     }).encode()
 
     # During the provider call, the webhook runs before request_refund saves the refund row.
-    # It gets a 404 so Razorpay retries. The request then commits and a retry can succeed.
+    # It gets a 500 so Razorpay retries. The request then commits and a retry can succeed.
     def provider_refund(*args, **kwargs):
         response = post_webhook(app.test_client(), "evt-refund-race", {
             "event": "refund.processed",
             "payload": {"refund": {"entity": {"id": provider_refund_id}}},
         })
-        assert response.status_code == 404
+        assert response.status_code == 500
         return {"id": provider_refund_id, "status": "pending"}
 
     fake = MagicMock()
@@ -166,12 +166,13 @@ def test_refund_webhook_arriving_before_refund_record_is_saved(app, student, men
     with patch("app.services.refund_service.get_razorpay_client", return_value=fake):
         refund, _, _ = request_refund(payment.id, 1, 500, "Race")
 
+    assert refund.status == RefundStatus.PENDING
+
     retry = post_webhook(app.test_client(), "evt-refund-race", {
         "event": "refund.processed",
         "payload": {"refund": {"entity": {"id": provider_refund_id}}},
     })
 
-    assert refund.status == RefundStatus.PENDING
     assert retry.status_code == 200
     assert Refund.query.filter_by(id=refund.id).one().status == RefundStatus.PROCESSED
 
@@ -210,7 +211,7 @@ def test_student_cannot_view_refunds(student_client, student, menu):
     assert response.status_code == 403
 
 
-def test_unauthenticated_cannot_request_refund(client, student, menu):
+def test_unauthenticated_cannot_request_refund(anon_client, student, menu):
     payment = create_paid_payment(student, menu)
-    response = client.post(f"/api/admin/payments/{payment.id}/refund", json={"reason": "No"})
+    response = anon_client.post(f"/api/admin/payments/{payment.id}/refund", json={"reason": "No"})
     assert response.status_code == 401

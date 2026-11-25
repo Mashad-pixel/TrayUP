@@ -98,7 +98,7 @@ def _confirm_captured_payment(
         payment.status = PaymentRecordStatus.REFUND_REQUIRED
         payment.provider_payment_id = provider_payment_id
         db.session.commit()
-        committed_order = db.session.get(Order, order.id)
+        committed_order = db.session.get(Order, payment.order_id)
         if committed_order is not None:
             sync_order_to_firebase(committed_order)
         return payment, True
