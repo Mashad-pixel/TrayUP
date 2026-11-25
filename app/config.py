@@ -13,7 +13,13 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", DEV_SECRET_KEY)
 
     # Relative SQLite paths are stored in the instance/ folder by Flask-SQLAlchemy.
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///canteen.db")
+    _database_url = os.getenv("DATABASE_URL", "sqlite:///canteen.db")
+    # Render Postgres may provide postgres://; normalize to SQLAlchemy's psycopg 3 driver.
+    if _database_url.startswith("postgres://"):
+        _database_url = _database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif _database_url.startswith("postgresql://"):
+        _database_url = _database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    SQLALCHEMY_DATABASE_URI = _database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     SESSION_COOKIE_HTTPONLY = True
@@ -34,6 +40,20 @@ class Config:
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
+    # Firebase Realtime Database is a server-side mirror for live order updates.
+    FIREBASE_ENABLED = os.getenv("FIREBASE_ENABLED", "false").lower() == "true"
+    FIREBASE_DATABASE_URL = os.getenv(
+        "FIREBASE_DATABASE_URL",
+        "https://trayup-36abb-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    )
+    _firebase_service_account_path = os.getenv(
+        "FIREBASE_SERVICE_ACCOUNT_PATH",
+        "serviceAccountKey.json",
+    )
+    if not os.path.isabs(_firebase_service_account_path):
+        _firebase_service_account_path = os.path.join(BASE_DIR, _firebase_service_account_path)
+    FIREBASE_SERVICE_ACCOUNT_PATH = os.path.abspath(_firebase_service_account_path)
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -52,6 +72,7 @@ class TestingConfig(Config):
     RAZORPAY_KEY_ID = ""
     RAZORPAY_KEY_SECRET = ""
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"
+    FIREBASE_ENABLED = False  # Unit tests never contact the live Firebase project.
 
 
 class ProductionConfig(Config):

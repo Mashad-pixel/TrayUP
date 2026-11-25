@@ -16,6 +16,7 @@ from app.services.errors import OrderError
 from app.services.inventory_service import release_reservations, reserve_stock, return_sold_stock
 from app.services.pricing_service import normalize_requested_items, price_order
 from app.services.time_utils import as_utc, utcnow
+from app.services.firebase_service import sync_order_to_firebase
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 64
 EXPIRY_NOTE = "Payment not completed in time"
@@ -188,7 +189,10 @@ def create_order(student_id, raw_items, idempotency_key=None):
         db.session.rollback()
         raise
 
-    return order, raw_token
+    committed_order = db.session.get(Order, order.id)
+    if committed_order is not None:
+        sync_order_to_firebase(committed_order)
+    return committed_order or order, raw_token
 
 
 def cancel_order(order_id, staff_user_id, reason):
@@ -242,7 +246,10 @@ def cancel_order(order_id, staff_user_id, reason):
         ))
 
         db.session.commit()
-        return order, refund_required
+        committed_order = db.session.get(Order, order.id)
+        if committed_order is not None:
+            sync_order_to_firebase(committed_order)
+        return committed_order or order, refund_required
 
     except Exception:
         db.session.rollback()

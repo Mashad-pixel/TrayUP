@@ -11,6 +11,7 @@ from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_status_history import OrderStatusHistory
 from app.services.errors import OrderError
 from app.services.time_utils import as_utc, utcnow
+from app.services.firebase_service import sync_order_to_firebase
 
 
 TOKEN_BYTES = 32
@@ -166,7 +167,10 @@ def confirm_collection(raw_token, staff_user_id):
         ))
 
         db.session.commit()
-        return db.session.get(Order, order.id)
+        collected_order = db.session.get(Order, order.id)
+        if collected_order is not None:
+            sync_order_to_firebase(collected_order)
+        return collected_order
 
     except Exception:
         db.session.rollback()

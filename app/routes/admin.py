@@ -7,6 +7,7 @@ from app.responses import error_response
 from app.security.permissions import roles_required
 from app.services.canteen_service import update_status
 from app.services.errors import ServiceValidationError
+from app.services.firebase_service import firebase_connection_status
 from app.services.menu_service import (
     MenuValidationError,
     create_menu_item,
@@ -80,3 +81,13 @@ def update_canteen_status():
     except ServiceValidationError as exc:
         return _validation_error(exc.errors)
     return jsonify(status), 200
+
+
+@admin_bp.get("/firebase/status")
+@login_required
+@roles_required(UserRole.ADMIN)
+def firebase_status():
+    """Admin-only Firebase Admin SDK health status; never exposes credentials."""
+    status = firebase_connection_status()
+    http_status = 200 if status["connected"] or not status["enabled"] else 503
+    return jsonify(success=status["connected"], firebase=status), http_status

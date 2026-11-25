@@ -17,6 +17,7 @@ from app.routes.orders import orders_bp
 from app.routes.payments import payments_bp
 from app.routes.public import public_bp
 from app.routes.reports import reports_bp
+from app.services.firebase_service import initialize_firebase
 
 
 @login_manager.user_loader
@@ -55,6 +56,7 @@ def create_app(config_name="development"):
         raise RuntimeError("Set a real SECRET_KEY in the environment before running in production.")
 
     db.init_app(app)
+    initialize_firebase(app)
     migrate.init_app(app, db)
     csrf.init_app(app)
 
