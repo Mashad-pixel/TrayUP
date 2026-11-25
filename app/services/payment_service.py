@@ -16,6 +16,7 @@ from app.services.order_service import expire_order, payment_window_closed
 from app.services.razorpay_client import PROVIDER_ERRORS, get_razorpay_client
 from app.services.refund_service import handle_refund_failed_event, handle_refund_processed_event
 from app.services.time_utils import utcnow
+from app.services.firebase_service import sync_order_to_firebase
 
 CURRENCY = "INR"
 
@@ -97,6 +98,9 @@ def _confirm_captured_payment(
         payment.status = PaymentRecordStatus.REFUND_REQUIRED
         payment.provider_payment_id = provider_payment_id
         db.session.commit()
+        committed_order = db.session.get(Order, order.id)
+        if committed_order is not None:
+            sync_order_to_firebase(committed_order)
         return payment, True
 
     # The payment window may have elapsed before the scheduled expiry job ran.
@@ -144,6 +148,9 @@ def _confirm_captured_payment(
 
     _record_attempt(payment.id, AttemptStatus.SUCCESS, provider_payment_id=provider_payment_id)
     db.session.commit()
+    committed_order = db.session.get(Order, order.id)
+    if committed_order is not None:
+        sync_order_to_firebase(committed_order)
     return payment, False
 
 
