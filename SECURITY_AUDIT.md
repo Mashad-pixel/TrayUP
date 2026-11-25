@@ -74,4 +74,11 @@ No high-confidence secret pattern was confirmed in the scanned `main` history. T
 
 ## Verification status
 
-Repository pattern scans and source reviews were completed. Automated tests, Bandit, pip-audit, and live deployment tests are configured but remain pending their first successful GitHub Actions/deployment run. Do not treat this revision as production-certified until those results pass.
+**GitHub Actions verification passed on commit `f498cb08537c159845e8b76d52096a851ab8f136` (run #45574810589):**
+
+- `pytest -q`: **212 passed**
+- `pip-audit --strict -r requirements.txt`: **No known vulnerabilities found**
+- `bandit -q -r app`: **Passed**
+- JavaScript syntax check (`node --check` across `frontend` and `tests/frontend`): **Passed**
+
+Repository secret-pattern scans and source reviews were also completed as described above. Live Render/Firebase/Razorpay/Vercel deployment smoke tests were not run, and GitHub repository security-settings state was not available for inspection. Do not treat this repository-level audit as a guarantee that the deployed system is fully secure; complete the operational checks and remaining-risk items above.
