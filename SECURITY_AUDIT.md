@@ -62,6 +62,43 @@ Added CI checks run `pip-audit` against the resolved requirements, Bandit agains
 
 No high-confidence secret pattern was confirmed in the scanned `main` history. This remediation therefore does not rewrite Git history. No force-push was performed. If a credential is later confirmed in another branch, tag, fork or clone, revoke/rotate it first; prepare a reviewed `git-filter-repo` rewrite and only force-push after explicit approval. Collaborators must coordinate a re-clone/reset after any approved rewrite.
 
+## Optional Git-history cleanup for the old Firebase project URL
+
+**Not executed.** The previous Firebase Realtime Database endpoint is present in earlier commits even though it is absent from current `main`. It is a project identifier/endpoint, not a private key or authentication secret. The following procedure rewrites commit history; use it only after an explicit approval, a maintenance window, and coordination with all collaborators.
+
+1. Freeze pushes/merges and make a verified backup mirror:
+   ```bash
+   git clone --mirror https://github.com/Mashad-pixel/TrayUP.git TrayUP-backup.git
+   git clone --mirror https://github.com/Mashad-pixel/TrayUP.git TrayUP-rewrite.git
+   cd TrayUP-rewrite.git
+   python -m pip install git-filter-repo
+   ```
+2. Create a replacement file containing the previously committed URL and a safe marker (the value below is the Firebase database endpoint, not a private key):
+   ```bash
+   OLD_FIREBASE_URL='https://trayup-36abb-default-rtdb.asia-southeast1.firebasedatabase.app/'
+   printf '%s==>FIREBASE_DATABASE_URL_REMOVED\n' "$OLD_FIREBASE_URL" > ../trayup-replacements.txt
+   git filter-repo --replace-text ../trayup-replacements.txt
+   ```
+3. Verify the rewritten refs before pushing:
+   ```bash
+   git log --all -S "$OLD_FIREBASE_URL" --oneline
+   git log --all --oneline --decorate -5
+   git show-ref
+   ```
+   The first command should return no commits. Review all branch and tag refs; coordinate any refs not intended for rewriting.
+4. `git-filter-repo` may remove the `origin` remote. Re-add it, fetch the current remote main SHA after the push freeze, and use a lease-protected update:
+   ```bash
+   git remote add origin https://github.com/Mashad-pixel/TrayUP.git
+   git fetch origin --prune
+   OLD_MAIN_SHA=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+   git push --force-with-lease="refs/heads/main:$OLD_MAIN_SHA" origin refs/heads/main:refs/heads/main
+   git push --force --tags origin
+   ```
+   Repeat lease-protected updates for every other rewritten branch after reviewing its old remote SHA. Temporarily adjust branch protection only if GitHub blocks the approved update, then restore it immediately.
+5. Ask every collaborator to discard old clones/branches and freshly clone the rewritten repository. Old clones can reintroduce the removed history if pushed later.
+
+Do not run these commands against the live repository until all maintainers approve the history rewrite. Keep the backup mirror offline and access-controlled.
+
 ## Remaining risks and required operational steps
 
 1. Enter `FIREBASE_DATABASE_URL` in Render after this commit. The Render blueprint leaves it `sync: false` to avoid embedding the project endpoint in Git. Firebase is enabled in the blueprint and startup will fail closed if the URL or service-account Secret File is missing.
