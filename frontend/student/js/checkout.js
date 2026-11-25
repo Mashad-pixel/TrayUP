@@ -2,6 +2,7 @@
   document.getElementById("app-header").innerHTML = trayComponents.header();
 
   const cart = trayStorage.get("trayup-cart", []);
+  const loginUrl = "./login.html?next=checkout.html";
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
   })[character]);
@@ -127,9 +128,9 @@
       if (!hasPaymentMethod) trayNotify("No digital payment methods are available right now.");
     } catch (error) {
       paymentOptionsEl.innerHTML = error.status === 401
-        ? '<p>Please <a href="./login.html?next=checkout.html">sign in</a> to load payment options.</p>'
+        ? "<p>Sign in is required to continue to payment.</p>"
         : '<p role="alert">Could not load payment options. Please refresh and try again.</p>';
-      submitButton.disabled = true;
+      submitButton.disabled = error.status !== 401;
       trayNotify(error.message || "Could not load payment options.");
     }
   }
@@ -204,8 +205,10 @@
   }
 
   function handleError(error) {
-    if (error.status === 401) trayNotify("Sign in with a student account to place your order. You can keep browsing or choose Log in.");
-    else if (error.code === "ORDER_EXPIRED" || error.code === "ORDER_NOT_PAYABLE_REFUND_REQUIRED") {
+    if (error.status === 401) {
+      window.location.href = loginUrl;
+      return;
+    } else if (error.code === "ORDER_EXPIRED" || error.code === "ORDER_NOT_PAYABLE_REFUND_REQUIRED") {
       serverOrder = null;
       orderDetails = null;
       renderEstimate();
@@ -218,6 +221,24 @@
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (submitting) return;
+
+    setBusy(true, "Checking sign in…");
+    try {
+      const response = await trayAuth.currentUser();
+      if (String(response?.data?.role || "").toUpperCase() !== "STUDENT") {
+        window.location.href = loginUrl;
+        return;
+      }
+    } catch (error) {
+      if (error.status === 401) {
+        window.location.href = loginUrl;
+        return;
+      }
+      setBusy(false);
+      trayNotify(error.message || "Could not verify your sign-in. Please try again.");
+      return;
+    }
+    setBusy(false);
 
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
