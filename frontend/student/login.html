@@ -12,7 +12,7 @@ body{background:#050302;color:var(--ink);font:400 15px/1.5 Inter,system-ui,-appl
 #scene{height:min(62vh,560px);width:auto;max-width:100%;touch-action:none;overflow:visible}
 .lamp{filter:brightness(calc(.26 + .74 * var(--l,0)))}
 .lit{opacity:var(--l,0)}
-.chain{opacity:calc(.85 + .15 * var(--l,0))}
+.chain{opacity:calc(.85 + .15 * var(--l,0));filter:brightness(calc(1 + .6 * var(--l,0))) drop-shadow(0 0 7px rgba(255,195,120,var(--l,0)))}
 #handle{cursor:grab;outline:none}
 #handle:focus-visible #pull path{stroke:var(--champ);stroke-width:2}
 .hit{fill:transparent}
@@ -293,7 +293,56 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
   }
 
   // State
-  let on = false, cooldownUntil = 0;
+  let on = false, cooldownUntil = 0, autoLightPending = true, autoLightTimer;
+  const autoLightStartedAt = performance.now();
+  const autoLightDelay = 1000;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  let flickerAudio = null, flickerNoise = null, flickerSoundTimer = null;
+  function playFlickerTick() {
+    if (!flickerAudio || flickerAudio.state !== 'running') return;
+    const source = flickerAudio.createBufferSource();
+    const filter = flickerAudio.createBiquadFilter();
+    const gain = flickerAudio.createGain();
+    source.buffer = flickerNoise;
+    filter.type = 'highpass';
+    filter.frequency.value = 1200;
+    const now = flickerAudio.currentTime;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+    source.connect(filter).connect(gain).connect(flickerAudio.destination);
+    source.start(now);
+    source.stop(now + 0.03);
+    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+  }
+  function startFlickerSound() {
+    if (!autoLightPending || !flickerAudio || flickerAudio.state !== 'running' || flickerSoundTimer !== null) return;
+    playFlickerTick();
+    flickerSoundTimer = setInterval(playFlickerTick, 150);
+  }
+  function stopFlickerSound() {
+    if (flickerSoundTimer !== null) {
+      clearInterval(flickerSoundTimer);
+      flickerSoundTimer = null;
+    }
+  }
+  function unlockFlickerSound() {
+    if (!autoLightPending || reducedMotion || !AudioContextClass) return;
+    if (!flickerAudio) {
+      flickerAudio = new AudioContextClass();
+      flickerNoise = flickerAudio.createBuffer(1, Math.ceil(flickerAudio.sampleRate * 0.03), flickerAudio.sampleRate);
+      const samples = flickerNoise.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+    }
+    if (flickerAudio.state === 'running') { startFlickerSound(); return; }
+    flickerAudio.resume().then(startFlickerSound, error => console.warn('Lamp flicker audio could not start:', error));
+  }
+  if (!reducedMotion && AudioContextClass) {
+    unlockFlickerSound();
+    addEventListener('pointerdown', unlockFlickerSound, { once: true });
+    addEventListener('keydown', unlockFlickerSound, { once: true });
+  }
   let grabbing = false, grabId = null, grabOX = 0, grabOY = 0, downX = 0, downY = 0, downT = 0, maxDown = 0;
   let tgtX = restX, tgtY = restY;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -312,6 +361,11 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
     else if (now < cooldownUntil) return;
     cooldownUntil = now + 300;
     on = !on;
+    if (on && autoLightPending) {
+      autoLightPending = false;
+      clearTimeout(autoLightTimer);
+      stopFlickerSound();
+    }
     if (!on && force === undefined) setTimeout(() => window.__reset && window.__reset(), 600);
     PY[N - 1] = Y[N - 1] + 1.5;
     if (on) {
@@ -360,7 +414,12 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 
   let lastL = -1, lastC = -1, lastVis = null;
   function render(now) {
-    const l = tick(lightT, now), c = tick(cardT, now);
+    let l = tick(lightT, now);
+    const c = tick(cardT, now);
+    if (autoLightPending && !reducedMotion && now - autoLightStartedAt < autoLightDelay) {
+      const flicker = [0.05, 0.85, 0.1, 0.95, 0.2, 0.04, 0.72, 0.12];
+      l = flicker[Math.floor((now - autoLightStartedAt) / 150) % flicker.length];
+    }
     if (Math.abs(l - lastL) > 0.0005) { root.style.setProperty('--l', l.toFixed(4)); lastL = l; }
     if (Math.abs(c - lastC) > 0.0005) { root.style.setProperty('--c', c.toFixed(4)); lastC = c; }
     const vis = c > 0.004;
@@ -612,7 +671,13 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 
   // Reset link from email (?reset=TOKEN): light the lamp and open the new-password view
   const rt = new URLSearchParams(location.search).get('reset');
-  if (rt) { history.replaceState(null, '', location.pathname); resetTok = rt; setTimeout(() => { toggle(true); goView('v-newpw'); }, 400); }
+  if (rt) { history.replaceState(null, '', location.pathname); resetTok = rt; }
+  autoLightTimer = setTimeout(() => {
+    autoLightPending = false;
+    stopFlickerSound();
+    toggle(true);
+    if (rt) goView('v-newpw');
+  }, autoLightDelay);
 
   // Fixed-step physics at 60 Hz, render every frame
   const STEP = 1000 / 60;
