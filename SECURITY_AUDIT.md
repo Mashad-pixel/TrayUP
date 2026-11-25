@@ -34,7 +34,7 @@ This is a repository-level audit. The auditor cannot inspect local-only files, p
 - Vercel uses a same-origin `/api` rewrite to the backend. No permissive wildcard CORS configuration was found in the reviewed app.
 - Reviewed route/service SQL paths use SQLAlchemy ORM and a static health-check query; no interpolated SQL execution pattern was found in the reviewed sources.
 - No user-controlled file-upload route was found in the reviewed Flask routes. The static frontend is served with Werkzeug `send_from_directory`, which constrains paths to the configured frontend directory.
-- No high-confidence provider-token, private-key, service-account private-key or credential-bearing database-URI pattern was confirmed in current tracked files or the inspected commit patches.
+- No high-confidence provider-token, private-key, service-account private-key or credential-bearing database-URI pattern was confirmed in current tracked files or the inspected commit patches. A public Firebase RTDB project endpoint was present in pre-remediation history; it is not an authentication credential, but it has been removed from the current source tree.
 - No tracked `.env`, service-account JSON, PEM/private-key, certificate or keystore file was found in the inspected commit trees. `.env.example` contains placeholders/blank secret values.
 - No wildcard CORS, `eval`/dynamic code execution, unsafe pickle/YAML loading, or obvious raw SQL interpolation pattern was found in the reviewed route/service/frontend files.
 
@@ -54,7 +54,7 @@ Added CI checks run `pip-audit` against the resolved requirements, Bandit agains
 - **Firebase service-account private key: rotate immediately.** A service-account credential was supplied during the earlier Firebase integration exchange. Even though this audit did not find a service-account JSON/private key in the repository, treat that key as exposed. Create a replacement key in Google Cloud IAM, upload it to Render as a Secret File at `/etc/secrets/serviceAccountKey.json`, check the admin-only Firebase health endpoint, then disable/delete the old key. Never commit the JSON.
 - Razorpay Key ID, Key Secret and Webhook Secret are environment-backed and no matching provider-secret pattern was found in repository history. Rotate them if they were pasted into any public repository, issue, log or other untrusted system; update Render and the Razorpay webhook configuration together, verify a test event, then revoke old values.
 - The Render-generated `SECRET_KEY` and database connection string are provisioned outside tracked source. Confirm they are unique/current in Render. Rotate only if they were exposed; changing `SECRET_KEY` invalidates active Flask sessions.
-- The Firebase Realtime Database URL is a project endpoint, not a private-key credential. It is no longer checked into source and must be supplied via Render environment configuration.
+- The Firebase Realtime Database URL is a project endpoint, not a private-key credential. It has been removed from the current `main` tree and must be supplied via Render environment configuration. The endpoint was present in earlier `main` commits; it remains viewable in those historical Git objects because no history rewrite was performed.
 
 ## Git history
 

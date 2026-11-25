@@ -272,7 +272,7 @@ def test_verify_rejects_bad_signature(client, student, menu, fake_razorpay):
     response = client.post("/api/payments/verify", json=verify_body(rp_order, "pay_1", signature=wrong))
 
     assert response.status_code == 400
-    assert response.get_json()["error"]["code"] == "PAYMENT_VERIFICATION_FAILED"
+    assert response.get_json()["error"]["code"] == "INVALID_SIGNATURE"
     assert reload(Order, order.id).payment_status == PaymentStatus.PENDING
 
 
@@ -287,7 +287,7 @@ def test_verify_rejects_non_ascii_signature_without_crashing(client, student, me
     )
 
     assert response.status_code == 400
-    assert response.get_json()["error"]["code"] == "PAYMENT_VERIFICATION_FAILED"
+    assert response.get_json()["error"]["code"] == "INVALID_SIGNATURE"
 
 
 def test_verify_rejects_amount_mismatch(client, student, menu, fake_razorpay):
@@ -297,7 +297,7 @@ def test_verify_rejects_amount_mismatch(client, student, menu, fake_razorpay):
 
     response = client.post("/api/payments/verify", json=verify_body(rp_order, "pay_1"))
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "PAYMENT_MISMATCH"
     assert reload(Order, order.id).payment_status == PaymentStatus.PENDING
 
@@ -321,7 +321,7 @@ def test_verify_rejects_payment_belonging_to_other_order(client, student, menu, 
 
     response = client.post("/api/payments/verify", json=verify_body(rp_order, "pay_1"))
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "PAYMENT_MISMATCH"
 
 

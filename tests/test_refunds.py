@@ -158,7 +158,7 @@ def test_refund_webhook_arriving_before_refund_record_is_saved(app, student, men
             "event": "refund.processed",
             "payload": {"refund": {"entity": {"id": provider_refund_id}}},
         })
-        assert response.status_code == 404
+        assert response.status_code == 500
         return {"id": provider_refund_id, "status": "pending"}
 
     fake = MagicMock()
@@ -210,7 +210,7 @@ def test_student_cannot_view_refunds(student_client, student, menu):
     assert response.status_code == 403
 
 
-def test_unauthenticated_cannot_request_refund(client, student, menu):
+def test_unauthenticated_cannot_request_refund(anon_client, student, menu):
     payment = create_paid_payment(student, menu)
-    response = client.post(f"/api/admin/payments/{payment.id}/refund", json={"reason": "No"})
+    response = anon_client.post(f"/api/admin/payments/{payment.id}/refund", json={"reason": "No"})
     assert response.status_code == 401

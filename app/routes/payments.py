@@ -134,9 +134,14 @@ def razorpay_webhook():
 
     try:
         outcome = process_webhook(raw_body, signature, event_id, payload)
-    except Exception:
+    except Exception as exc:
+        # Do not log exception text or payload data; it can include provider/client details.
         # 500 makes Razorpay retry the delivery.
-        current_app.logger.exception("Webhook processing failed for event %s", event_id)
+        current_app.logger.error(
+            "Webhook processing failed for event %s (%s)",
+            event_id,
+            type(exc).__name__,
+        )
         return error_response("WEBHOOK_PROCESSING_FAILED", "Could not process the event.", 500)
 
     return success_response("Webhook received", {"event_id": event_id, "outcome": outcome})
