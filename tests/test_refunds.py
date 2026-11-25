@@ -171,8 +171,8 @@ def test_refund_webhook_arriving_before_refund_record_is_saved(app, student, men
         "payload": {"refund": {"entity": {"id": provider_refund_id}}},
     })
 
-    assert refund.status == RefundStatus.PENDING
     assert retry.status_code == 200
+    assert refund.status == RefundStatus.PROCESSED
     assert Refund.query.filter_by(id=refund.id).one().status == RefundStatus.PROCESSED
 
 
