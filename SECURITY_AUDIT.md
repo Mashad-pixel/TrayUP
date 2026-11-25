@@ -21,7 +21,7 @@ This is a repository-level audit. The auditor cannot inspect local-only files, p
 | Medium | Admin and kitchen views rendered backend-controlled names, statuses, IDs and timestamps via HTML string interpolation. Admin menu/staff/category views also rendered stored values without escaping. | Added contextual HTML escaping before interpolation in the affected admin/kitchen views. |
 | Medium | Firebase Realtime Database project URL was embedded in tracked application/deployment configuration. | Removed it from source defaults and `.env.example`; Render now requires the endpoint to be entered as an unsynced environment value. |
 | Medium | Ignore rules did not comprehensively cover cloud credential JSON, private keys, certificates, keystores and infrastructure state files. | Expanded `.gitignore` and retained `.env.example` as the sole environment template exception. |
-| Medium | Flask lower bound allowed versions affected by CVE-2026-27205; Werkzeug did not have an explicit minimum for the current `safe_join` advisory. | Raised floors to Flask 3.1.3 and Werkzeug 3.1.9. See the vendor/advisory references below. |
+| Medium | Flask and Werkzeug minimums were too permissive; `pip-audit` also found pytest 8.4.2 and setuptools 80.10.2 vulnerable in the development/build environment. | Raised floors to Flask 3.1.3, Werkzeug 3.1.9, pytest 9.0.3 and setuptools 84.1.0. |
 | Medium | Request payload size was not explicitly bounded. | Added a 1 MiB Flask request-body limit. |
 | Medium | Security headers did not explicitly disable browser geolocation or set HSTS on HTTPS responses. | Added HSTS on secure requests, Permissions Policy (`geolocation=()`; camera remains available for collection QR scanning), frame/content-type/referrer policies, and `Vary: Cookie`. |
 | Low | Webhook processing stored raw exception strings in the webhook audit row. Provider/client exception messages can contain operational details. | Webhook audit errors now store a stable application error code or exception class, not raw exception text. |
@@ -44,6 +44,8 @@ The existing requirements used broad lower bounds. Two specific current advisori
 
 - Flask CVE-2026-27205 affects Flask versions before 3.1.3: https://nvd.nist.gov/vuln/detail/CVE-2026-27205
 - Werkzeug GHSA-g6x2-hccm-hh4m identifies versions before 3.1.9 as affected: https://github.com/pallets/werkzeug/security/advisories/GHSA-g6x2-hccm-hh4m
+- pytest PYSEC-2026-1845 / CVE-2025-71176 affects versions through 9.0.2; fixed in 9.0.3: https://osv.dev/vulnerability/PYSEC-2026-1845
+- setuptools PYSEC-2026-3447 and GHSA-xmj3-9gf7-h52w affected the resolved 80.10.2 release; `pip-audit` identified 84.1.0 as the available fixed release.
 
 Flask-WTF's 1.3.0 release is available from PyPI: https://pypi.org/project/Flask-WTF/
 
