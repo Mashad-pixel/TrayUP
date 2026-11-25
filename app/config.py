@@ -34,6 +34,17 @@ class Config:
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
+    # Firebase Realtime Database is a server-side mirror for live order updates.
+    FIREBASE_ENABLED = os.getenv("FIREBASE_ENABLED", "false").lower() == "true"
+    FIREBASE_DATABASE_URL = os.getenv(
+        "FIREBASE_DATABASE_URL",
+        "https://trayup-36abb-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    )
+    FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv(
+        "FIREBASE_SERVICE_ACCOUNT_PATH",
+        os.path.join(BASE_DIR, "serviceAccountKey.json"),
+    )
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -52,6 +63,7 @@ class TestingConfig(Config):
     RAZORPAY_KEY_ID = ""
     RAZORPAY_KEY_SECRET = ""
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"
+    FIREBASE_ENABLED = False  # Unit tests never contact the live Firebase project.
 
 
 class ProductionConfig(Config):
