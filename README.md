@@ -923,3 +923,37 @@ collection-token, authentication and migration files were not copied over the cu
 because the existing payments, refunds and kitchen workflows depend on the repository's
 integer order IDs and student ownership model. Guest checkout remains a separate integration
 task; this commit preserves the currently working authenticated-order/payment architecture.
+
+## Deployment (Render backend + Vercel frontend)
+
+The Flask application and its SQL database run on Render. The static frontend is deployed separately to Vercel and calls the backend through the Vercel `/api/*` rewrite, so browser requests remain same-origin.
+
+### Render
+
+1. In Render, choose **New → Blueprint** and connect this repository, `Mashad-pixel/TrayUP`, branch `main`.
+2. Render reads `render.yaml` from the repository root and creates the Flask web service and PostgreSQL database.
+3. Open the web service's **Environment** settings and add the Razorpay secrets:
+   - `RAZORPAY_KEY_ID`
+   - `RAZORPAY_KEY_SECRET`
+   - `RAZORPAY_WEBHOOK_SECRET`
+4. Under **Secret Files**, upload your newly generated Firebase service-account JSON as `serviceAccountKey.json`. The blueprint expects it at `/etc/secrets/serviceAccountKey.json`. Never commit this file.
+5. Wait for the deploy to finish, then check `https://YOUR-RENDER-SERVICE.onrender.com/api/health`.
+6. Create the first admin using the project's Flask CLI command documented in the Administration section below (or run `flask --app wsgi:app create-user ...` in the Render Shell if that command is available in the deployed version).
+
+**Database note:** the included Blueprint uses Render's free PostgreSQL plan for a demo deployment. Free Render databases are temporary and expire according to Render's current free-database policy. Do not use this database for permanent canteen orders or real payments. For production, change the database plan in `render.yaml` to a currently available paid persistent plan before deploying.
+
+### Vercel
+
+1. In Vercel, choose **Add New → Project** and import `Mashad-pixel/TrayUP`.
+2. Set **Root Directory** to `frontend`.
+3. Deploy the project. Vercel serves the static HTML/CSS/JavaScript from this folder.
+4. The file `frontend/vercel.json` proxies `/api/*` to `https://trayup-mashad-api.onrender.com/api/*`. If Render assigns a different service hostname, update the destination in `frontend/vercel.json` to the exact Render URL and redeploy Vercel.
+
+### Required post-deployment checks
+
+- Confirm the Render `/api/health` endpoint reports both application and database healthy.
+- In Vercel, test student menu loading, login/logout, admin and kitchen access, checkout, Razorpay test payment, webhook verification, and order status updates.
+- In Firebase Console, verify that only the intended minimal order mirror is written.
+- Configure the Razorpay webhook URL to the Render service's payment webhook endpoint shown by the application; use HTTPS and the exact route implemented in the payment routes.
+- Keep the Firebase service-account key, Flask secret, and Razorpay secrets only in Render environment/secret-file settings, never in GitHub or Vercel.
+
