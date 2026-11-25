@@ -14,7 +14,10 @@ class WebhookEvent(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # X-Razorpay-Event-Id header. Unique, so duplicate deliveries are detected.
+    # Provider name ("razorpay", "phonepe", etc.)
+    provider = db.Column(db.String(32), nullable=False, default="razorpay", server_default="razorpay")
+
+    # X-Razorpay-Event-Id header or PhonePe transaction ID. Unique, so duplicate deliveries are detected.
     provider_event_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
 
     event_type = db.Column(db.String(60), nullable=False)

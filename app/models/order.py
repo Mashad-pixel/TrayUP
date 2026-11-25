@@ -14,6 +14,7 @@ class OrderStatus:
 
 class PaymentStatus:
     PENDING = "pending"
+    AWAITING_CONFIRMATION = "awaiting_confirmation"
     PAID = "paid"
     FAILED = "failed"
     REFUNDED = "refunded"
@@ -63,6 +64,8 @@ class Order(db.Model):
         default=PaymentStatus.PENDING,
         index=True,
     )
+    payment_method = db.Column(db.String(32), nullable=True)
+    utr_number = db.Column(db.String(32), unique=True, nullable=True, index=True)
     order_status = db.Column(
         db.String(30),
         nullable=False,
