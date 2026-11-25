@@ -121,7 +121,7 @@
       return;
     }
 
-    if (error.status === 401) trayNotify("Please sign in with a student account before placing an order");
+    if (error.status === 401) trayNotify("Sign in with a student account to place your order. You can keep browsing or choose Log in.");
     else if (error.code === "PAYMENT_CANCELLED") trayNotify("Payment was cancelled. Tap Pay to try again.");
     else if (error.code === "ORDER_EXPIRED" || error.code === "ORDER_NOT_PAYABLE_REFUND_REQUIRED") {
       // This order can no longer be paid. The next submit creates a new one.

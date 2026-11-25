@@ -455,6 +455,38 @@ body.home-page {
   font-size: 12px;
   letter-spacing: .06em;
 }
+.home-page .nav-actions .login-link {
+  display: inline-flex;
+  min-width: 108px;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid rgba(23, 63, 53, .2);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fffdf6, #f3ead6);
+  box-shadow: 0 4px 12px rgba(32, 63, 49, .08), inset 0 1px 0 #fff;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+.home-page .nav-actions .login-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(220, 124, 69, .65);
+  box-shadow: 0 7px 16px rgba(32, 63, 49, .12);
+}
+.home-page .login-link svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: #dc7c45;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .home-page .cart-btn {
   min-width: 58px;
   min-height: 42px;

@@ -174,6 +174,7 @@ def test_refund_webhook_arriving_before_refund_record_is_saved(app, student, men
     })
 
     assert retry.status_code == 200
+    assert refund.status == RefundStatus.PROCESSED
     assert Refund.query.filter_by(id=refund.id).one().status == RefundStatus.PROCESSED
 
 
