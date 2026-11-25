@@ -12,6 +12,7 @@
   const heroTransitionDuration = 700;
   let activeCategory = "Popular";
   let activePeriod = "day";
+  let activeMood = "";
   let heroProducts = [];
   let heroIndex = 0;
   let heroTimer = null;
@@ -96,6 +97,35 @@
     })[character]);
   }
 
+  function matchesMood(item, mood) {
+    const text = `${item.name} ${item.description}`.toLowerCase();
+    const matches = {
+      spicy: /\b(masala|biryani|chole|pav bhaji|pakoda|momos|chilli|spicy)\b/,
+      comfort: /\b(dosa|idli|pongal|paratha|thali|dal|rajma|rice|poori)\b/,
+      quick: /\b(samosa|fries|burger|momos|sandwich|pakoda|pizza|puri)\b/,
+      sweet: /\b(chocolate|oreo|mango|milkshake|lassi|strawberry|sweet)\b/,
+      refreshing: /\b(juice|soda|lime|lassi|buttermilk|water|cold coffee|milkshake)\b/
+    };
+    return Boolean(matches[mood] && matches[mood].test(text));
+  }
+
+  function renderCategoryRail() {
+    const rail = document.getElementById("category-rail");
+    const categoryItems = [];
+    Array.from(new Set(catalog.map((item) => item.category))).forEach((category) => {
+      const item = catalog.find((product) => product.category === category && product.isAvailable);
+      if (item) categoryItems.push({ category, item });
+    });
+    rail.innerHTML = categoryItems.map(({ category, item }, index) => `
+      <button class="category-tile" type="button" data-category="${escapeHtml(category)}" aria-label="Browse ${escapeHtml(category)}">
+        <img src="${escapeHtml(item.image)}" alt="" loading="lazy">
+        <span class="category-number">0${index + 1}</span>
+        <strong>${escapeHtml(category)}</strong>
+        <span class="category-arrow" aria-hidden="true">↗</span>
+      </button>
+    `).join("");
+  }
+
   function heroSlideMarkup(item) {
     return `
       <a class="hero-slide" href="./student/product.html?id=${encodeURIComponent(item.id)}"
@@ -103,7 +133,7 @@
         aria-hidden="true" tabindex="-1" inert>
         <img class="hero-slide-image" src="${escapeHtml(item.image)}" alt="" loading="eager">
         <div class="hero-copy">
-          <div class="open-status">Canteen open · 8:00 AM–6:00 PM</div>
+          <div class="open-status">Made for the in-between</div>
           <span class="hero-category">${escapeHtml(item.category)} · Popular pick</span>
           <h1>${escapeHtml(item.name)}</h1>
           <p>${escapeHtml(item.description)}</p>
@@ -210,7 +240,7 @@
   function updateHeroAutoplay() {
     window.clearInterval(heroTimer);
     if (heroPaused || heroProducts.length < 2 || document.hidden) return;
-    heroTimer = window.setInterval(() => showHeroSlide(1), 3000);
+    heroTimer = window.setInterval(() => showHeroSlide(1), 5200);
   }
 
   document.getElementById("hero-previous").addEventListener("click", () => showHeroSlide(-1, true));
@@ -251,6 +281,7 @@
       .map((item) => ({ item, score: searchScore(item, query), sales: popularCounts.get(item.id) || 0 }))
       .filter(({ item, score }) =>
         score > 0 &&
+        (!activeMood || matchesMood(item, activeMood)) &&
         (normalizedQuery ||
           activeCategory === "All" ||
           (isPopularView ? popularCounts.has(item.id) : item.category === activeCategory)) &&
@@ -270,10 +301,10 @@
       empty.className = "empty-state";
       empty.style.gridColumn = "1/-1";
       const title = document.createElement("h3");
-      title.textContent = normalizedQuery ? `"${query}" is not available on the menu` :
+      title.textContent = normalizedQuery ? "Couldn't find that craving" :
         isPopularView ? "No orders recorded for this period yet" : "No dishes found";
       const copy = document.createElement("p");
-      copy.textContent = normalizedQuery ? "Try another dish name or a related keyword." :
+      copy.textContent = normalizedQuery ? `No menu items matched "${query}". Try another dish or category.` :
         isPopularView ? "Popular dishes will appear here as orders are recorded." : "Try a different category or search.";
       empty.append(title, copy);
       grid.appendChild(empty);
@@ -287,24 +318,35 @@
       activeCategory === "Popular" ? `Popular ${activePeriod === "day" ? "today" : activePeriod === "week" ? "this week" : "this month"}` :
       activeCategory === "All" ? "All dishes" : activeCategory;
     grid.innerHTML = visible.map((item) => `
-      <article class="food-card" data-id="${item.id}" tabindex="0" role="link" aria-label="View ${item.name} details">
-        <img class="food-card-image" src="${item.image}" alt="${item.name}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22600%22 height=%22450%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%232d322f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23f7f4eb%22%3E${encodeURIComponent(item.name)}%3C/text%3E%3C/svg%3E'">
+      <article class="food-card" data-id="${escapeHtml(item.id)}" tabindex="0" role="link" aria-label="View ${escapeHtml(item.name)} details">
+        <div class="food-card-image-wrap">
+          <img class="food-card-image" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22600%22 height=%22450%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%232d322f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23f7f4eb%22%3E${encodeURIComponent(item.name)}%3C/text%3E%3C/svg%3E'">
+          ${item.isPopular ? '<span class="food-card-ribbon">Campus pick</span>' : ""}
+        </div>
         <div class="food-card-body">
-          <span class="eyebrow">${item.category}${item.popularityRank ? ` · #${item.popularityRank} popular` : ""}</span>
-          <h3>${item.name}</h3>
-          <p class="food-card-description">${item.description || ""}</p>
+          <span class="eyebrow">${escapeHtml(item.category)}${item.popularityRank ? ` · #${item.popularityRank} popular` : ""}</span>
+          <h3>${escapeHtml(item.name)}</h3>
+          <p class="food-card-description">${escapeHtml(item.description || "")}</p>
           <div class="food-card-status-row">
-            <span class="status ${item.isAvailable ? "" : "danger"}">${item.isAvailable ? "Available" : "Sold out"} · ★ ${item.rating}</span>
+            <span class="status ${item.isAvailable ? "" : "danger"}">${item.isAvailable ? "Available" : "Sold out"}</span>
             <span class="food-card-diet ${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "is-egg" : item.isVeg ? "is-veg" : "is-non-veg"}" title="${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "Contains egg" : item.isVeg ? "Vegetarian" : "Non-vegetarian"}">●</span>
           </div>
           ${item.popularityRank ? `<p class="food-card-orders">${item.periodOrders} ordered ${activePeriod === "day" ? "today" : activePeriod === "week" ? "this week" : "this month"}</p>` : ""}
           <div class="food-meta">
             <span class="price">${rupees(item.price)}</span>
-            <span class="food-card-link">View dish</span>
+            <div class="food-card-actions" data-card-actions="${escapeHtml(item.id)}">
+              <button class="food-card-add" type="button" data-card-add="${escapeHtml(item.id)}" ${item.isAvailable ? "" : "disabled"}>Add <span aria-hidden="true">+</span></button>
+              <div class="food-card-quantity" data-card-quantity-control="${escapeHtml(item.id)}" hidden>
+                <button type="button" data-card-qty="-1" data-id="${escapeHtml(item.id)}" aria-label="Remove one ${escapeHtml(item.name)}">−</button>
+                <span data-card-quantity>0</span>
+                <button type="button" data-card-qty="1" data-id="${escapeHtml(item.id)}" aria-label="Add one ${escapeHtml(item.name)}">+</button>
+              </div>
+            </div>
           </div>
         </div>
       </article>
     `).join("");
+    updateCardQuantities();
   }
 
   function getCart() {
@@ -318,7 +360,9 @@
 
   function renderCart() {
     const cart = getCart();
-    document.getElementById("cart-count").textContent = cart.reduce((sum, item) => sum + item.qty, 0);
+    const quantity = cart.reduce((sum, item) => sum + item.qty, 0);
+    document.getElementById("cart-count").textContent = quantity;
+    document.getElementById("mobile-cart-count").textContent = quantity;
     document.getElementById("cart-total").textContent = rupees(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
     document.getElementById("cart-items").innerHTML = cart.length ? cart.map((item) => `
       <div class="cart-item">
@@ -332,14 +376,49 @@
         </div>
       </div>
     `).join("") : `<div class="empty-state"><p>Your cart is empty</p></div>`;
+    updateCardQuantities();
+    const count = document.getElementById("cart-count");
+    count.classList.remove("cart-count-pop");
+    requestAnimationFrame(() => count.classList.add("cart-count-pop"));
+  }
+
+  function updateCardQuantities() {
+    const cart = getCart();
+    document.querySelectorAll("[data-card-actions]").forEach((actions) => {
+      const item = cart.find((entry) => entry.id === Number(actions.dataset.cardActions));
+      const quantity = item ? item.qty : 0;
+      const addButton = actions.querySelector("[data-card-add]");
+      const controls = actions.querySelector("[data-card-quantity-control]");
+      if (!addButton || !controls) return;
+      addButton.hidden = quantity > 0;
+      controls.hidden = quantity <= 0;
+      controls.querySelector("[data-card-quantity]").textContent = quantity;
+    });
   }
 
   grid.addEventListener("click", (event) => {
+    const addButton = event.target.closest("[data-card-add]");
+    const quantityButton = event.target.closest("[data-card-qty]");
+    if (addButton || quantityButton) {
+      event.stopPropagation();
+      const id = Number((addButton || quantityButton).dataset.id || (addButton || quantityButton).dataset.cardAdd);
+      const product = catalog.find((item) => item.id === id);
+      if (!product || !product.isAvailable) return;
+      const cart = getCart();
+      const item = cart.find((entry) => entry.id === id);
+      const change = quantityButton ? Number(quantityButton.dataset.cardQty) : 1;
+      if (item) item.qty += change;
+      else if (change > 0) cart.push({ ...product, qty: change });
+      saveCart(cart.filter((entry) => entry.qty > 0));
+      if (change > 0 && window.trayNotify) window.trayNotify("Good choice! Added to your tray.");
+      return;
+    }
     const card = event.target.closest(".food-card");
     if (card) window.location.href = `./student/product.html?id=${encodeURIComponent(card.dataset.id)}`;
   });
   grid.addEventListener("keydown", (event) => {
     const card = event.target.closest(".food-card");
+    if (event.target.closest("button")) return;
     if (card && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       window.location.href = `./student/product.html?id=${encodeURIComponent(card.dataset.id)}`;
@@ -348,8 +427,40 @@
 
   document.getElementById("open-cart").addEventListener("click", () => drawer.classList.add("open"));
   document.getElementById("close-cart").addEventListener("click", () => drawer.classList.remove("open"));
-  document.querySelector(".search").addEventListener("submit", (event) => {
+  const searchForm = document.querySelector(".search");
+  const suggestionList = document.getElementById("menu-suggestions");
+
+  function renderSuggestions(query) {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      suggestionList.hidden = true;
+      suggestionList.innerHTML = "";
+      return;
+    }
+    const matches = catalog
+      .map((item) => ({ item, score: searchScore(item, trimmed) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+    suggestionList.hidden = false;
+    suggestionList.innerHTML = matches.length
+      ? matches.map(({ item }) => `
+        <button class="search-suggestion" type="button" role="option" data-suggestion-id="${escapeHtml(item.id)}">
+          <img src="${escapeHtml(item.image)}" alt="" loading="lazy">
+          <span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.category)}</small></span>
+          <b>${rupees(item.price)}</b>
+        </button>`).join("")
+      : '<p class="search-no-results">Couldn’t find that craving. Try another dish.</p>';
+  }
+
+  function selectSuggestion(button) {
+    if (!button) return;
+    window.location.href = `./student/product.html?id=${encodeURIComponent(button.dataset.suggestionId)}`;
+  }
+
+  searchForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    suggestionList.hidden = true;
     activeCategory = "All";
     document.querySelectorAll(".category-nav a").forEach((entry) =>
       entry.classList.toggle("active", entry.dataset.navCategory === "All")
@@ -357,14 +468,48 @@
     renderCatalog();
     document.getElementById("popular").scrollIntoView({ behavior: "smooth", block: "start" });
   });
-  document.querySelector(".search input").addEventListener("input", () => {
-    if (document.querySelector(".search input").value.trim()) {
+  searchInput.addEventListener("input", () => {
+    renderSuggestions(searchInput.value);
+    if (searchInput.value.trim()) {
       activeCategory = "All";
       document.querySelectorAll(".category-nav a").forEach((entry) =>
         entry.classList.toggle("active", entry.dataset.navCategory === "All")
       );
     }
     renderCatalog();
+  });
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" && !suggestionList.hidden) {
+      const firstSuggestion = suggestionList.querySelector("[data-suggestion-id]");
+      if (firstSuggestion) {
+        event.preventDefault();
+        firstSuggestion.focus();
+      }
+    } else if (event.key === "Escape") {
+      suggestionList.hidden = true;
+    }
+  });
+  suggestionList.addEventListener("click", (event) => {
+    selectSuggestion(event.target.closest("[data-suggestion-id]"));
+  });
+  suggestionList.addEventListener("keydown", (event) => {
+    const buttons = Array.from(suggestionList.querySelectorAll("[data-suggestion-id]"));
+    const currentIndex = buttons.indexOf(document.activeElement);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      const nextIndex = (currentIndex + direction + buttons.length) % buttons.length;
+      if (buttons[nextIndex]) buttons[nextIndex].focus();
+    } else if (event.key === "Escape") {
+      suggestionList.hidden = true;
+      searchInput.focus();
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      selectSuggestion(buttons[currentIndex]);
+    }
+  });
+  document.addEventListener("click", (event) => {
+    if (!searchForm.contains(event.target)) suggestionList.hidden = true;
   });
   document.getElementById("availability-filter").addEventListener("change", renderCatalog);
   document.getElementById("diet-filter").addEventListener("change", (event) => {
@@ -378,8 +523,12 @@
   });
   document.getElementById("clear-search").addEventListener("click", () => {
     document.querySelector(".search input").value = "";
+    suggestionList.hidden = true;
     document.getElementById("availability-filter").value = "all";
     document.getElementById("diet-filter").value = "all";
+    activeMood = "";
+    document.getElementById("clear-mood").hidden = true;
+    document.querySelectorAll("[data-mood]").forEach((button) => button.classList.remove("active"));
     activeCategory = "Popular";
     document.querySelectorAll(".category-nav a").forEach((entry) =>
       entry.classList.toggle("active", entry.dataset.navCategory === "Popular")
@@ -394,10 +543,80 @@
     if (category === "My Orders") return;
     event.preventDefault();
     activeCategory = category;
+    activeMood = "";
+    document.getElementById("clear-mood").hidden = true;
+    document.querySelectorAll("[data-mood]").forEach((button) => button.classList.remove("active"));
     document.querySelector(".search input").value = "";
     document.querySelectorAll(".category-nav a").forEach((entry) => entry.classList.toggle("active", entry === link));
     renderCatalog();
     document.getElementById("popular").scrollIntoView({ behavior: "smooth" });
+  });
+
+  document.getElementById("category-rail").addEventListener("click", (event) => {
+    const tile = event.target.closest("[data-category]");
+    if (!tile) return;
+    activeCategory = tile.dataset.category;
+    activeMood = "";
+    document.getElementById("clear-mood").hidden = true;
+    document.querySelectorAll("[data-mood]").forEach((button) => button.classList.remove("active"));
+    searchInput.value = "";
+    document.querySelectorAll(".category-nav a").forEach((link) =>
+      link.classList.toggle("active", link.dataset.navCategory === activeCategory)
+    );
+    renderCatalog();
+    document.getElementById("popular").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.getElementById("mood-choices").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mood]");
+    if (!button) return;
+    activeMood = activeMood === button.dataset.mood ? "" : button.dataset.mood;
+    activeCategory = "All";
+    searchInput.value = "";
+    document.getElementById("clear-mood").hidden = !activeMood;
+    document.querySelectorAll("[data-mood]").forEach((choice) =>
+      choice.classList.toggle("active", choice.dataset.mood === activeMood)
+    );
+    document.querySelectorAll(".category-nav a").forEach((link) =>
+      link.classList.toggle("active", link.dataset.navCategory === "All")
+    );
+    renderCatalog();
+    document.getElementById("popular").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.getElementById("clear-mood").addEventListener("click", () => {
+    activeMood = "";
+    document.querySelectorAll("[data-mood]").forEach((button) => button.classList.remove("active"));
+    document.getElementById("clear-mood").hidden = true;
+    renderCatalog();
+  });
+
+  document.getElementById("surprise-me").addEventListener("click", () => {
+    const visibleIds = new Set(Array.from(grid.querySelectorAll(".food-card"), (card) => Number(card.dataset.id)));
+    const options = catalog.filter((item) => item.isAvailable && visibleIds.has(item.id));
+    const result = document.getElementById("roulette-result");
+    if (!options.length) {
+      result.innerHTML = '<div class="roulette-placeholder"><span>!</span></div><p>No available dishes match those filters. Clear filters and try again.</p>';
+      result.classList.add("is-revealed");
+      return;
+    }
+    const item = options[Math.floor(Math.random() * options.length)];
+    result.innerHTML = `
+      <a class="roulette-dish" href="./student/product.html?id=${encodeURIComponent(item.id)}">
+        <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}">
+        <span class="roulette-dish-info"><small>YOUR RANDOM PICK</small><strong>${escapeHtml(item.name)}</strong><b>${rupees(item.price)}</b></span>
+        <span class="roulette-dish-arrow" aria-hidden="true">↗</span>
+      </a>`;
+    result.classList.remove("is-revealed");
+    requestAnimationFrame(() => result.classList.add("is-revealed"));
+  });
+
+  document.querySelector("[data-mobile-cart]").addEventListener("click", () => drawer.classList.add("open"));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && drawer.classList.contains("open")) {
+      drawer.classList.remove("open");
+      document.getElementById("open-cart").focus();
+    }
   });
 
   document.getElementById("cart-items").addEventListener("click", (event) => {
@@ -410,6 +629,7 @@
     saveCart(cart.filter((entry) => entry.qty > 0));
   });
 
+  renderCategoryRail();
   renderHero();
   renderCatalog();
   renderCart();

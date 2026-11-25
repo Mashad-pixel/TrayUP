@@ -1,4 +1,4 @@
-.admin-shell { min-height:100vh; background:#f7f8f5; }
+.admin-shell { min-height:100vh; background:transparent; }
 .admin-layout { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
 .admin-sidebar {
   background:#173f35;
@@ -47,7 +47,7 @@
   min-height:100vh;
   display:grid;
   place-items:center;
-  background:linear-gradient(135deg,#173f35 0 42%,#f7f8f5 42%);
+  background:transparent;
 }
 .login-card {
   width:min(420px,calc(100% - 32px));

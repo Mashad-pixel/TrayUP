@@ -1,6 +1,6 @@
 .kitchen-shell {
   min-height: 100vh;
-  background: #f4f5f1;
+  background: transparent;
 }
 .kitchen-top {
   height: 68px;
