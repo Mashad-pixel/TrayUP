@@ -251,7 +251,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
   const NS = 'http://www.w3.org/2000/svg';
   const $ = s => document.querySelector(s);
   const root = document.documentElement;
-  const svg = $('#scene'), linksG = $('#links'), handle = $('#handle'), pull = $('#pull');
+  const svg = $('#scene'), stage = $('.stage'), linksG = $('#links'), handle = $('#handle'), pull = $('#pull');
   const card = $('#login');
   const S = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.4 : 1;
 
@@ -346,6 +346,32 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
   let grabbing = false, grabId = null, grabOX = 0, grabOY = 0, downX = 0, downY = 0, downT = 0, maxDown = 0;
   let tgtX = restX, tgtY = restY;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  let scrollFrame = 0;
+  function updateMobileLampScroll() {
+    if (window.innerWidth > 760) {
+      svg.style.opacity = '';
+      svg.style.filter = '';
+      svg.style.transform = '';
+      return;
+    }
+    const maxScroll = stage.scrollHeight - stage.clientHeight;
+    const progress = maxScroll > 0 && maxScroll - stage.scrollTop < 1
+      ? 1
+      : clamp(stage.scrollTop / Math.max(1, maxScroll), 0, 1);
+    svg.style.opacity = (1 - progress).toFixed(3);
+    svg.style.filter = `brightness(${(1 - progress * 0.45).toFixed(3)}) blur(${(progress * 5).toFixed(1)}px)`;
+    svg.style.transform = `translateY(${(-progress * 24).toFixed(1)}px) scale(${(1 - progress * 0.2).toFixed(3)})`;
+  }
+  function scheduleMobileLampScroll() {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = 0;
+      updateMobileLampScroll();
+    });
+  }
+  stage.addEventListener('scroll', scheduleMobileLampScroll, { passive: true });
+  addEventListener('resize', scheduleMobileLampScroll);
+  updateMobileLampScroll();
   let stretch = 0;             // smoothly eases the chain longer while it is pulled
 
   function svgPt(e) {
