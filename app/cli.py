@@ -4,8 +4,8 @@ from flask.cli import with_appcontext
 from app.extensions import db
 from app.models.user import User, UserRole
 from app.services.order_service import expire_unpaid_orders
+from app.security.account_rules import is_valid_email, is_valid_name, normalize_email, password_problem
 
-MIN_PASSWORD_LENGTH = 8
 
 
 @click.command("create-user")
@@ -22,17 +22,20 @@ MIN_PASSWORD_LENGTH = 8
 @with_appcontext
 def create_user_command(name, email, role, password):
     name = name.strip()
-    email = email.strip().lower()
+    email = normalize_email(email)
     role = role.upper()
+
+    if not is_valid_name(name):
+        raise click.BadParameter("Enter a name with 1 to 100 characters.", param_hint="--name")
+    if not is_valid_email(email):
+        raise click.BadParameter("Enter a valid email address.", param_hint="--email")
 
     if not name:
         raise click.BadParameter("Name cannot be empty.", param_hint="--name")
 
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise click.BadParameter(
-            f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
-            param_hint="--password",
-        )
+    problem = password_problem(password)
+    if problem:
+        raise click.BadParameter(problem, param_hint="--password")
 
     if User.query.filter_by(email=email).first():
         raise click.ClickException(f"A user with email {email} already exists.")

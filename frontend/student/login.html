@@ -434,8 +434,8 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
       }
       msg.textContent = 'Signed in as ' + response.data.name + '.';
       pass.value = '';
-      const returnPages = { 'verify.html': './verify.html', 'checkout.html': './checkout.html', 'cart.html': './cart.html' };
-      window.location.href = returnPages[new URLSearchParams(window.location.search).get('next')] || './verify.html';
+      const returnPages = { 'checkout.html': './checkout.html', 'cart.html': './cart.html' };
+      window.location.href = returnPages[new URLSearchParams(window.location.search).get('next')] || '../index.html';
     } catch (error) {
       msg.textContent = error.status === 429 ? 'Too many attempts. Wait a few minutes and try again.' : (error.message || 'Unable to log in');
     } finally {
@@ -529,11 +529,18 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 
   // Register
   E('f-reg').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const v = validate(); if (!v) return;
+    if (v.id.type !== 'email') { E('r-msg').textContent = 'Use an email address to create your account.'; return; }
     busy = true; load(E('r-go'), true);
-    const r = await post('/api/register/start', { name: v.name, identifier: v.id.value, password: v.password, promo: E('r-promo').checked, terms: true, privacy: true });
-    busy = false; load(E('r-go'), false);
-    if (r.error) { E('r-msg').textContent = r.error; return; }
-    startVerify('register', v.id); });
+    try {
+      await trayApi.post('/auth/register', { name: v.name, email: v.id.value, password: v.password });
+      const returnPages = { 'checkout.html': './checkout.html', 'cart.html': './cart.html' };
+      window.location.href = returnPages[new URLSearchParams(window.location.search).get('next')] || '../index.html';
+    } catch (error) {
+      E('r-msg').textContent = error.status === 429 ? 'Too many registration attempts. Please try again later.' : (error.message || 'Could not create the account.');
+    } finally {
+      busy = false; load(E('r-go'), false);
+    }
+  });
 
   // Forgot password
   E('f-forgot').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const m = E('fg-msg'); m.textContent = '';

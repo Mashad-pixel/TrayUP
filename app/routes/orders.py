@@ -2,6 +2,8 @@ from flask import Blueprint, request
 from flask_login import current_user, login_required
 
 from app.extensions import limiter
+from app.models.user import UserRole
+from app.security.permissions import roles_required
 from app.responses import error_response, success_response
 from app.services.collection_service import as_utc, get_student_collection_qr
 from app.services.errors import OrderError
@@ -23,6 +25,7 @@ def _order_error(exc):
 
 @orders_bp.route("", methods=["POST"])
 @login_required
+@roles_required(UserRole.STUDENT)
 @limiter.limit("10 per minute")
 def create_order_route():
     payload = request.get_json(silent=True)
