@@ -342,14 +342,14 @@ def process_webhook(raw_body, signature, event_id, payload):
         failed = WebhookEvent.query.filter_by(provider_event_id=event_id).first()
         if failed:
             failed.processing_status = WebhookStatus.FAILED
-            failed.last_error = str(exc)[:500]
+            failed.last_error = (exc.code if isinstance(exc, OrderError) else type(exc).__name__)[:100]
         else:
             failed = WebhookEvent(
                 provider_event_id=event_id,
                 event_type=event_type,
                 payload_hash=hashlib.sha256(raw_body).hexdigest(),
                 processing_status=WebhookStatus.FAILED,
-                last_error=str(exc)[:500],
+                last_error=(exc.code if isinstance(exc, OrderError) else type(exc).__name__)[:100],
             )
             db.session.add(failed)
         db.session.commit()

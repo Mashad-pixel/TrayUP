@@ -54,6 +54,7 @@ def create_order_route():
 
 @orders_bp.route("", methods=["GET"])
 @login_required
+@roles_required(UserRole.STUDENT)
 def list_my_orders():
     try:
         page, per_page = parse_pagination(request.args)
@@ -70,6 +71,7 @@ def list_my_orders():
 
 @orders_bp.route("/<int:order_id>", methods=["GET"])
 @login_required
+@roles_required(UserRole.STUDENT)
 def get_my_order(order_id):
     order = get_order_for_student(current_user.id, order_id)
     if order is None:
@@ -81,6 +83,7 @@ def get_my_order(order_id):
 
 @orders_bp.route("/<int:order_id>/tracking", methods=["GET"])
 @login_required
+@roles_required(UserRole.STUDENT)
 def get_my_order_tracking(order_id):
     order = get_order_for_student(current_user.id, order_id)
     if order is None:
@@ -91,6 +94,7 @@ def get_my_order_tracking(order_id):
 
 @orders_bp.route("/<int:order_id>/collection-qr", methods=["GET"])
 @login_required
+@roles_required(UserRole.STUDENT)
 def get_collection_qr(order_id):
     try:
         raw_token, token, order = get_student_collection_qr(order_id, current_user.id)

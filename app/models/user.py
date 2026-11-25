@@ -31,7 +31,7 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
     def set_password(self, raw_password):
-        self.password_hash = generate_password_hash(raw_password)
+        self.password_hash = generate_password_hash(raw_password, method="scrypt")
 
     def check_password(self, raw_password):
         return check_password_hash(self.password_hash, raw_password)

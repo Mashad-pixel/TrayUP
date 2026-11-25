@@ -518,3 +518,20 @@ def test_webhook_not_configured_returns_503(anon_client, app):
 
     assert response.status_code == 503
     assert response.get_json()["error"]["code"] == "WEBHOOKS_NOT_CONFIGURED"
+
+
+
+def test_kitchen_role_cannot_create_or_verify_student_payment(app):
+    kitchen = make_user("kitchen-payment-role@test.com", role=UserRole.KITCHEN, name="Kitchen User")
+    kitchen_client = app.test_client()
+    login_as(kitchen_client, kitchen)
+
+    create_response = kitchen_client.post("/api/payments/create-order", json={"order_id": 1})
+    verify_response = kitchen_client.post(
+        "/api/payments/verify",
+        json=verify_body("order_not_real", "payment_not_real"),
+    )
+    assert create_response.status_code == 403
+    assert verify_response.status_code == 403
+    assert create_response.get_json()["error"]["code"] == "FORBIDDEN"
+    assert verify_response.get_json()["error"]["code"] == "FORBIDDEN"
