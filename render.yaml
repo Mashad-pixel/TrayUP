@@ -18,10 +18,12 @@ services:
           property: connectionString
       - key: RATELIMIT_STORAGE_URI
         value: memory://
+      - key: TRUSTED_PROXY_COUNT
+        value: "1"
       - key: FIREBASE_ENABLED
         value: "true"
       - key: FIREBASE_DATABASE_URL
-        value: https://trayup-36abb-default-rtdb.asia-southeast1.firebasedatabase.app/
+        sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_PATH
         value: /etc/secrets/serviceAccountKey.json
       - key: RAZORPAY_KEY_ID

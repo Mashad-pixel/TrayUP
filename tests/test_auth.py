@@ -98,3 +98,45 @@ def test_login_returns_csrf_token_for_next_requests(anon_client, student):
     assert response.status_code == 200
     token = response.get_json()["data"]["csrf_token"]
     assert isinstance(token, str) and len(token) > 20
+
+
+
+def test_registration_creates_student_and_ignores_requested_role(anon_client):
+    response = anon_client.post(
+        "/api/auth/register",
+        json={
+            "name": "New Student",
+            "email": "  NEW@student.test ",
+            "password": "StrongPass123!",
+            "role": "ADMIN",
+        },
+    )
+    assert response.status_code == 201
+    data = response.get_json()["data"]
+    assert data["role"] == "STUDENT"
+    assert data["email"] == "new@student.test"
+    assert isinstance(data["csrf_token"], str)
+    user = User.query.filter_by(email="new@student.test").one()
+    assert user.role == "STUDENT"
+    assert user.check_password("StrongPass123!")
+    assert anon_client.get("/api/auth/me").get_json()["data"]["role"] == "STUDENT"
+
+
+def test_registration_rejects_weak_password(anon_client):
+    response = anon_client.post(
+        "/api/auth/register",
+        json={"name": "New Student", "email": "weak@test.com", "password": "password"},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "INVALID_REGISTRATION"
+    assert User.query.filter_by(email="weak@test.com").count() == 0
+
+
+def test_registration_rejects_duplicate_email_case_insensitively(anon_client, student):
+    response = anon_client.post(
+        "/api/auth/register",
+        json={"name": "Duplicate", "email": " STUDENT@Test.com ", "password": "StrongPass123!"},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "EMAIL_UNAVAILABLE"
+    assert User.query.filter_by(email=STUDENT_EMAIL).count() == 1

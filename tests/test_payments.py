@@ -272,7 +272,7 @@ def test_verify_rejects_bad_signature(client, student, menu, fake_razorpay):
     response = client.post("/api/payments/verify", json=verify_body(rp_order, "pay_1", signature=wrong))
 
     assert response.status_code == 400
-    assert response.get_json()["error"]["code"] == "PAYMENT_VERIFICATION_FAILED"
+    assert response.get_json()["error"]["code"] == "INVALID_SIGNATURE"
     assert reload(Order, order.id).payment_status == PaymentStatus.PENDING
 
 
@@ -287,7 +287,7 @@ def test_verify_rejects_non_ascii_signature_without_crashing(client, student, me
     )
 
     assert response.status_code == 400
-    assert response.get_json()["error"]["code"] == "PAYMENT_VERIFICATION_FAILED"
+    assert response.get_json()["error"]["code"] == "INVALID_SIGNATURE"
 
 
 def test_verify_rejects_amount_mismatch(client, student, menu, fake_razorpay):
@@ -297,7 +297,7 @@ def test_verify_rejects_amount_mismatch(client, student, menu, fake_razorpay):
 
     response = client.post("/api/payments/verify", json=verify_body(rp_order, "pay_1"))
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "PAYMENT_MISMATCH"
     assert reload(Order, order.id).payment_status == PaymentStatus.PENDING
 
@@ -321,7 +321,7 @@ def test_verify_rejects_payment_belonging_to_other_order(client, student, menu, 
 
     response = client.post("/api/payments/verify", json=verify_body(rp_order, "pay_1"))
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "PAYMENT_MISMATCH"
 
 
@@ -518,3 +518,20 @@ def test_webhook_not_configured_returns_503(anon_client, app):
 
     assert response.status_code == 503
     assert response.get_json()["error"]["code"] == "WEBHOOKS_NOT_CONFIGURED"
+
+
+
+def test_kitchen_role_cannot_create_or_verify_student_payment(app):
+    kitchen = make_user("kitchen-payment-role@test.com", role=UserRole.KITCHEN, name="Kitchen User")
+    kitchen_client = app.test_client()
+    login_as(kitchen_client, kitchen)
+
+    create_response = kitchen_client.post("/api/payments/create-order", json={"order_id": 1})
+    verify_response = kitchen_client.post(
+        "/api/payments/verify",
+        json=verify_body("order_not_real", "payment_not_real"),
+    )
+    assert create_response.status_code == 403
+    assert verify_response.status_code == 403
+    assert create_response.get_json()["error"]["code"] == "FORBIDDEN"
+    assert verify_response.get_json()["error"]["code"] == "FORBIDDEN"

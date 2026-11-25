@@ -1,8 +1,8 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_wtf.csrf import CSRFError
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.responses import error_response
-
 from app.cli import register_cli
 from app.config import DEV_SECRET_KEY, config_map
 from app.extensions import csrf, db, limiter, login_manager, migrate
@@ -27,7 +27,6 @@ def load_user(user_id):
     except (TypeError, ValueError):
         return None
 
-    # Deactivated staff or students lose access immediately.
     if user is None or not user.is_active:
         return None
     return user
@@ -52,8 +51,20 @@ def create_app(config_name="development"):
     app = Flask(__name__)
     app.config.from_object(config_map[config_name])
 
-    if config_name == "production" and app.config["SECRET_KEY"] == DEV_SECRET_KEY:
-        raise RuntimeError("Set a real SECRET_KEY in the environment before running in production.")
+    if config_name == "production":
+        secret_key = app.config.get("SECRET_KEY")
+        if not isinstance(secret_key, str) or len(secret_key) < 32 or secret_key == DEV_SECRET_KEY:
+            raise RuntimeError(
+                "Production requires a unique SECRET_KEY of at least 32 characters."
+            )
+
+    trusted_proxy_count = app.config.get("TRUSTED_PROXY_COUNT", 0)
+    if trusted_proxy_count:
+        app.wsgi_app = ProxyFix(
+            app.wsgi_app,
+            x_for=trusted_proxy_count,
+            x_proto=trusted_proxy_count,
+        )
 
     db.init_app(app)
     initialize_firebase(app)
@@ -73,8 +84,15 @@ def create_app(config_name="development"):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=(self)")
+        response.headers.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         response.headers.setdefault("Cache-Control", "no-store")
+        response.vary.add("Cookie")
+        if request.is_secure:
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
+
     limiter.init_app(app)
     login_manager.init_app(app)
 
@@ -90,5 +108,4 @@ def create_app(config_name="development"):
     app.register_blueprint(reports_bp)
 
     register_cli(app)
-
     return app

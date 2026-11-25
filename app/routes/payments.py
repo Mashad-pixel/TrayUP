@@ -4,6 +4,8 @@ from flask import Blueprint, current_app, request
 from flask_login import current_user, login_required
 
 from app.extensions import csrf, limiter
+from app.models.user import UserRole
+from app.security.permissions import roles_required
 from app.responses import error_response, success_response
 from app.services.errors import OrderError
 from app.services.payment_service import (
@@ -31,6 +33,7 @@ def _required_string(payload, key):
 
 @payments_bp.route("/create-order", methods=["POST"])
 @login_required
+@roles_required(UserRole.STUDENT)
 @limiter.limit("10 per minute")
 def create_payment_order_route():
     payload = request.get_json(silent=True)
@@ -59,6 +62,7 @@ def create_payment_order_route():
 
 @payments_bp.route("/verify", methods=["POST"])
 @login_required
+@roles_required(UserRole.STUDENT)
 @limiter.limit("20 per minute")
 def verify_payment_route():
     payload = request.get_json(silent=True)
@@ -130,9 +134,14 @@ def razorpay_webhook():
 
     try:
         outcome = process_webhook(raw_body, signature, event_id, payload)
-    except Exception:
+    except Exception as exc:
+        # Do not log exception text or payload data; it can include provider/client details.
         # 500 makes Razorpay retry the delivery.
-        current_app.logger.exception("Webhook processing failed for event %s", event_id)
+        current_app.logger.error(
+            "Webhook processing failed for event %s (%s)",
+            event_id,
+            type(exc).__name__,
+        )
         return error_response("WEBHOOK_PROCESSING_FAILED", "Could not process the event.", 500)
 
     return success_response("Webhook received", {"event_id": event_id, "outcome": outcome})
