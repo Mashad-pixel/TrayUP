@@ -1,4 +1,4 @@
-# trayUP --TWO major problems facing right now
+# TrayUP --TWO major problems facing right now
 ||Payment and || location we do not need students who are now physically present cannot order
 ### Smart College Canteen — QR-Based Online Ordering & Payment System
 
