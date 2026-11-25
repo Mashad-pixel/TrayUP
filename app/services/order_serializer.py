@@ -14,6 +14,8 @@ def serialize_order(order, raw_token=None):
         "order_number": order.order_number,
         "order_status": order.order_status,
         "payment_status": order.payment_status,
+        "payment_method": getattr(order, "payment_method", None),
+        "utr_number": getattr(order, "utr_number", None),
         "subtotal_paise": order.subtotal_paise,
         "discount_paise": order.discount_paise,
         "tax_paise": order.tax_paise,

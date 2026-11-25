@@ -81,6 +81,19 @@ def get_kitchen_queue(status_filter, limit):
     return queue
 
 
+def get_pending_confirmation_orders(limit=DEFAULT_QUEUE_LIMIT):
+    """Return orders awaiting payment confirmation (Soundbox UPI or Cash at counter)."""
+    return (
+        Order.query.filter(
+            Order.order_status == OrderStatus.PENDING_PAYMENT,
+            Order.payment_status == PaymentStatus.AWAITING_CONFIRMATION,
+        )
+        .order_by(Order.created_at.asc(), Order.id.asc())
+        .limit(limit)
+        .all()
+    )
+
+
 def change_order_status(order_id, new_status, staff_user_id):
     """Move a paid order one step forward in the kitchen. Returns the updated order."""
     if new_status not in ALL_ORDER_STATUSES:

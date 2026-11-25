@@ -61,6 +61,54 @@ def expire_orders_command():
     click.echo(f"Expired {count} unpaid order(s).")
 
 
+@click.command("seed-demo")
+@with_appcontext
+def seed_demo_command():
+    """Seed sample users, canteen settings, and menu items for local testing."""
+    from app.models.canteen import CanteenSettings
+    from app.models.menu import MenuItem
+
+    roles = [
+        ("Demo Admin", "admin@trayup.internal", UserRole.ADMIN, "AdminPass123!"),
+        ("Demo Kitchen", "kitchen@trayup.internal", UserRole.KITCHEN, "KitchenPass123!"),
+        ("Demo Student", "student@trayup.internal", UserRole.STUDENT, "StudentPass123!"),
+    ]
+    for name, email, role, pwd in roles:
+        if not User.query.filter_by(email=email).first():
+            u = User(name=name, email=email, role=role, is_active=True)
+            u.set_password(pwd)
+            db.session.add(u)
+            click.echo(f"Created {role} {email}")
+
+    settings = db.session.get(CanteenSettings, 1)
+    if not settings:
+        settings = CanteenSettings(
+            id=1,
+            is_accepting_orders=True,
+            payment_provider="sandbox",
+            merchant_display_name="Campus Canteen",
+            upi_vpa="canteen@ybl",
+            cash_enabled=True,
+            cash_max_order_paise=20000,
+        )
+        db.session.add(settings)
+        click.echo("Created default CanteenSettings")
+
+    if MenuItem.query.count() == 0:
+        demo_items = [
+            MenuItem(name="Masala Dosa", category="Breakfast", price_paise=5000, is_available=True),
+            MenuItem(name="Veg Burger", category="Fast Food", price_paise=6000, is_available=True, stock_quantity=20),
+            MenuItem(name="Cold Coffee", category="Beverages", price_paise=4000, is_available=True),
+            MenuItem(name="Samosa (2 pcs)", category="Snacks", price_paise=3000, is_available=True, stock_quantity=50),
+        ]
+        db.session.add_all(demo_items)
+        click.echo("Added 4 demo menu items")
+
+    db.session.commit()
+    click.echo("Demo data seeded successfully.")
+
+
 def register_cli(app):
     app.cli.add_command(create_user_command)
     app.cli.add_command(expire_orders_command)
+    app.cli.add_command(seed_demo_command)
