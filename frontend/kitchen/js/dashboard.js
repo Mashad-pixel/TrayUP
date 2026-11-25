@@ -1,6 +1,9 @@
 (function () {
   const demoMode = new URLSearchParams(window.location.search).get("demo") === "1";
   const statuses = ["received","preparing","ready","collected"];
+  const pendingRoot = document.getElementById("pending-confirmations");
+  const pendingCount = document.getElementById("pending-confirmation-count");
+  let pendingLoading = false;
   const demoQueue = {
     received: [
       {id:101,order_number:"TUP-4821",created_at:"10:24 AM",items:[{name:"Masala Dosa",quantity:2},{name:"Cold Coffee",quantity:1}]},
@@ -58,6 +61,62 @@
       col.innerHTML = heading + (cards || '<div class="empty-state" style="background:transparent">No orders</div>');
     });
   }
+  function renderPendingConfirmations(orders) {
+    pendingCount.textContent = `${orders.length} pending`;
+    if (!orders.length) {
+      pendingRoot.innerHTML = '<p class="empty-state">No payments are waiting for confirmation.</p>';
+      return;
+    }
+
+    pendingRoot.innerHTML = orders.map(order => {
+      const id = Number(order.id);
+      const safeId = Number.isInteger(id) && id > 0 ? String(id) : "";
+      const amount = (Number(order.total_paise) || 0) / 100;
+      const items = (order.items || []).map(item =>
+        "<li>" + Math.max(1, Number(item.quantity) || 1) + " × " +
+        esc(item.item_name || item.name || "Item") + "</li>"
+      ).join("");
+      const created = order.created_at ? new Date(order.created_at) : null;
+      const createdLabel = created && !Number.isNaN(created.getTime())
+        ? created.toLocaleString("en-IN", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })
+        : "";
+      return '<article class="payment-confirmation-ticket" data-pending-order="' + safeId + '">' +
+        '<header><strong>' + esc(order.order_number || "Order") + '</strong><time>' + esc(createdLabel) + '</time></header>' +
+        '<p><strong>Amount:</strong> ₹' + amount.toLocaleString("en-IN", { maximumFractionDigits: 2 }) + '</p>' +
+        '<p><strong>Method:</strong> ' + esc(order.payment_method || "UPI / Soundbox") + '</p>' +
+        '<p><strong>UTR:</strong> ' + esc(order.utr_number || "Not provided") + '</p>' +
+        '<ul>' + items + '</ul>' +
+        (safeId ? '<div class="payment-confirmation-actions">' +
+          '<button class="btn btn-primary" type="button" data-payment-action="confirm">Confirm payment</button>' +
+          '<button class="btn btn-secondary" type="button" data-payment-action="reject">Reject</button>' +
+        '</div>' : '<p role="alert">This order has an invalid ID and cannot be updated.</p>') +
+        '</article>';
+    }).join("");
+  }
+  async function loadPendingConfirmations() {
+    if (pendingLoading) return;
+    if (demoMode) {
+      pendingCount.textContent = "Demo";
+      pendingRoot.innerHTML = '<p class="empty-state">Payment confirmation actions are disabled in demo mode.</p>';
+      return;
+    }
+
+    pendingLoading = true;
+    try {
+      const response = await trayApi.get("/kitchen/orders/pending-confirmation?limit=100");
+      if (!Array.isArray(response?.data?.orders)) throw new Error("The payment confirmation queue returned an invalid response.");
+      renderPendingConfirmations(response.data.orders);
+    } catch (error) {
+      pendingCount.textContent = "Unavailable";
+      pendingRoot.textContent = error.status === 401
+        ? "Please sign in with a kitchen or admin account to view payment claims."
+        : error.status === 403
+          ? "This account does not have permission to confirm payments."
+          : error.message || "Unable to load payment claims. Retry when the backend is available.";
+    } finally {
+      pendingLoading = false;
+    }
+  }
   async function load() {
     if (demoMode) return render(demoQueue, true);
     try {
@@ -82,13 +141,45 @@
       button.disabled = false; trayNotify(error.message || "Could not update order status.");
     }
   });
+  pendingRoot.addEventListener("click", async event => {
+    const button = event.target.closest("[data-payment-action]");
+    if (!button || demoMode) return;
+    const ticket = button.closest("[data-pending-order]");
+    const orderId = ticket?.dataset.pendingOrder;
+    if (!orderId) return;
+    const action = button.dataset.paymentAction;
+    if (action === "reject" && !window.confirm("Reject this payment claim and cancel the order?")) return;
+
+    button.disabled = true;
+    try {
+      if (action === "confirm") {
+        await trayApi.post("/kitchen/orders/" + orderId + "/confirm-payment", {
+          notes: "Payment confirmed after Soundbox verification"
+        });
+        trayNotify("Payment confirmed and order moved to the kitchen queue.");
+      } else {
+        await trayApi.post("/kitchen/orders/" + orderId + "/reject-payment", {
+          reason: "Payment not received"
+        });
+        trayNotify("Payment rejected and order cancelled.");
+      }
+      await Promise.all([load(), loadPendingConfirmations()]);
+    } catch (error) {
+      button.disabled = false;
+      trayNotify(error.message || "Could not update the payment claim.");
+    }
+  });
   document.getElementById("logout").addEventListener("click", async () => {
     try { await trayAuth.logout(); } catch (_) {}
     window.location.href = "./login.html";
   });
   load();
+  loadPendingConfirmations();
   if (!demoMode) {
-    const poll = setInterval(load,15000);
+    const poll = setInterval(() => {
+      load();
+      loadPendingConfirmations();
+    },15000);
     window.addEventListener("pagehide",()=>clearInterval(poll));
   }
 })();

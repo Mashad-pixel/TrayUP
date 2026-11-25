@@ -71,6 +71,7 @@
       "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
     })[character]);
     const paid = ["paid", "captured", "completed", "success"].includes(String(data.payment_status || "").toLowerCase());
+    const awaitingConfirmation = String(data.payment_status || "").toLowerCase() === "awaiting_confirmation";
     if (paid) {
       window.location.replace(`./order-placed-animation.html?receipt=${encodeURIComponent(data.order_number || "Pending")}`);
     }
@@ -82,7 +83,17 @@
     if (!paid) {
       document.getElementById("payment-progress").classList.remove("complete");
       document.getElementById("payment-progress").classList.add("active");
-      document.getElementById("confirmation-copy").textContent = "Your order is confirmed. Pay at the counter to complete payment.";
+      if (awaitingConfirmation) {
+        document.getElementById("confirmation-title").textContent = "Payment awaiting confirmation";
+        document.getElementById("confirmation-copy").textContent =
+          "Your payment claim was received. Staff will confirm it after hearing the Soundbox.";
+        document.querySelector("#payment-progress span:last-child").textContent = "Awaiting confirmation";
+        document.querySelector(".order-progress .progress-step").classList.remove("complete");
+        document.querySelector(".order-progress .progress-step span:last-child").textContent = "Order placed";
+        document.querySelector(".confirmation-icon").textContent = "…";
+      } else {
+        document.getElementById("confirmation-copy").textContent = "Your order is waiting for payment.";
+      }
     }
     const items = Array.isArray(data.items) ? data.items : [];
     document.getElementById("confirmation-food-track").innerHTML = items.length ? items.map((item) => `
@@ -92,4 +103,5 @@
       </article>
     `).join("") : '<p style="color:var(--muted)">No food items found.</p>';
   </script>
-</bod</html>
+</body>
+</html>
