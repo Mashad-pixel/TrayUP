@@ -125,7 +125,7 @@ def test_get_payment_methods(app, student, menu, client):
     data = response.get_json()["data"]
     assert "payment_provider" in data
     assert "upi" in data
-    assert "cash" in data
+    assert "cash" not in data
     assert "sandbox" in data
 
 
@@ -197,41 +197,6 @@ def test_submit_upi_claim_rejects_invalid_utr_format(app, student, menu, client)
     })
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "INVALID_UTR"
-
-
-def test_select_cash_payment_checks_canteen_setting(app, student, menu, client):
-    # Enable cash
-    settings = db.session.get(CanteenSettings, 1)
-    if not settings:
-        settings = CanteenSettings(id=1, cash_enabled=True, cash_max_order_paise=5000)
-        db.session.add(settings)
-    else:
-        settings.cash_enabled = True
-        settings.cash_max_order_paise = 5000
-    db.session.commit()
-
-    order = make_order(student, menu, quantity=2)  # 3000 paise <= 5000
-    response = client.post("/api/payments/cash/select", json={"order_id": order.id})
-    assert response.status_code == 200
-    assert response.get_json()["data"]["payment_status"] == PaymentStatus.AWAITING_CONFIRMATION
-
-    # Test cash limit exceeded
-    big_order = make_order(student, menu, quantity=5)  # 7500 paise > 5000
-    res_exceeded = client.post("/api/payments/cash/select", json={"order_id": big_order.id})
-    assert res_exceeded.status_code == 400
-    assert res_exceeded.get_json()["error"]["code"] == "CASH_LIMIT_EXCEEDED"
-
-
-def test_select_cash_rejected_when_cash_disabled(app, student, menu, client):
-    settings = db.session.get(CanteenSettings, 1)
-    if settings:
-        settings.cash_enabled = False
-        db.session.commit()
-
-    order = make_order(student, menu)
-    response = client.post("/api/payments/cash/select", json={"order_id": order.id})
-    assert response.status_code == 403
-    assert response.get_json()["error"]["code"] == "CASH_NOT_ENABLED"
 
 
 # ==============================================================================

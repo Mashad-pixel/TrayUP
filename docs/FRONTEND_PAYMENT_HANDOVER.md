@@ -37,16 +37,14 @@ PHONEPE_SALT_INDEX=1
 
 ## 2. Architecture & Payment Options Overview
 
-The backend supports 4 distinct payment options tailored for college canteens:
+The backend supports 3 payment options tailored for college canteens:
 
 ```
                   ┌── [Option 1: PhonePe / UPI Apps] ── Direct Deep Link / Intent
                   │
 [Student Checkout]├── [Option 2: Counter QR & Soundbox] ── Student scans QR -> Submits Claim (UTR) -> Staff confirms
                   │
-                  ├── [Option 3: Cash at Counter] ── Submits Cash Intent -> Staff confirms at counter
-                  │
-                  └── [Option 4: Test Store Sandbox] ── 1-Click instant test payment (Dev/Test only)
+                  └── [Option 3: Test Store Sandbox] ── 1-Click instant test payment (Dev/Test only)
 ```
 
 ---
@@ -57,7 +55,6 @@ The backend supports 4 distinct payment options tailored for college canteens:
 Returns payment methods currently active based on Canteen Settings.
 
 - **URL:** `GET /api/payments/methods`
-- **Query Params:** `?order_id=<int>` (Optional: validates if order amount is eligible for cash)
 - **Auth:** Student (`@login_required`)
 - **Response `200 OK`:**
 ```json
@@ -70,11 +67,6 @@ Returns payment methods currently active based on Canteen Settings.
     "upi": {
       "enabled": true,
       "vpa": "canteen@ybl"
-    },
-    "cash": {
-      "enabled": true,
-      "max_order_paise": 15000,
-      "eligible_for_order": true
     },
     "sandbox": {
       "enabled": true
@@ -164,37 +156,7 @@ When a student scans the counter QR or pays via UPI and clicks "I have paid":
 
 ---
 
-### E. Select Cash at Counter
-Student chooses to pay cash directly at the counter.
-
-- **URL:** `POST /api/payments/cash/select`
-- **Auth:** Student (`@login_required`)
-- **Request Body:**
-```json
-{
-  "order_id": 14
-}
-```
-- **Response `200 OK`:**
-```json
-{
-  "success": true,
-  "message": "Cash payment selected. Pay at the counter to collect.",
-  "data": {
-    "order_id": 14,
-    "order_number": "TU261125A1B2",
-    "order_status": "pending_payment",
-    "payment_status": "awaiting_confirmation"
-  }
-}
-```
-- **Error Responses:**
-  - `403 CASH_NOT_ENABLED`: `"Cash payments are currently disabled by the canteen."`
-  - `400 CASH_LIMIT_EXCEEDED`: `"Cash payments are limited to maximum ₹150.00."`
-
----
-
-### F. Complete Sandbox Payment (Dev / Testing)
+### E. Complete Sandbox Payment (Dev / Testing)
 Instant 1-click test simulation for developers and testers.
 
 - **URL:** `POST /api/payments/sandbox/complete`
@@ -358,12 +320,6 @@ Admins can configure the canteen's payment behavior dynamically.
   │     └── After user switches back: Input for "Enter 12-digit UTR (optional)" + "I Have Paid" button
   │           └── Calls: POST /api/payments/upi/submit-claim
   │                 └── Screen enters: "Waiting for Canteen Soundbox Confirmation..."
-  │
-  ├── Select "Cash at Counter"
-  │     ├── If total > max limit: Disabled with badge "Max ₹150 for cash"
-  │     └── If eligible: Click "Pay Cash at Counter"
-  │           └── Calls: POST /api/payments/cash/select
-  │                 └── Screen enters: "Order Placed! Please pay ₹XX.XX at counter to receive food."
   │
   └── (Dev Only) "Instant Sandbox Pay"
         └── Click "Simulate 1-Click Pay"

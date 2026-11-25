@@ -18,7 +18,6 @@ from app.services.payment_service import (
     initiate_upi_order,
     process_phonepe_webhook,
     process_webhook,
-    select_cash_payment,
     submit_upi_claim,
     verify_checkout,
     verify_webhook_signature,
@@ -221,32 +220,6 @@ def submit_claim():
         "order_status": order.order_status,
         "payment_status": order.payment_status,
         "utr_number": order.utr_number,
-    })
-
-
-@payments_bp.route("/cash/select", methods=["POST"])
-@login_required
-@roles_required(UserRole.STUDENT)
-@limiter.limit("20 per minute")
-def select_cash():
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
-
-    order_id = payload.get("order_id")
-    if isinstance(order_id, bool) or not isinstance(order_id, int) or order_id < 1:
-        return error_response("INVALID_ORDER_ID", "order_id must be a positive whole number.", 400)
-
-    try:
-        order = select_cash_payment(order_id, current_user.id)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("Cash payment selected. Pay at the counter to collect.", {
-        "order_id": order.id,
-        "order_number": order.order_number,
-        "order_status": order.order_status,
-        "payment_status": order.payment_status,
     })
 
 

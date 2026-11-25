@@ -374,20 +374,6 @@ def process_webhook(raw_body, signature, event_id, payload):
 def get_available_payment_methods(order_id=None, student_id=None):
     """Return available payment methods and eligibility for the active canteen configuration."""
     settings = get_canteen_settings()
-    order = None
-    if order_id is not None:
-        query = Order.query.filter_by(id=order_id)
-        if student_id is not None:
-            query = query.filter_by(student_id=student_id)
-        order = query.first()
-
-    cash_max_paise = settings.get("cash_max_order_paise", 15000)
-    cash_eligible = False
-    if settings.get("cash_enabled"):
-        if order is None:
-            cash_eligible = True
-        else:
-            cash_eligible = order.total_paise <= cash_max_paise
 
     return {
         "payment_provider": settings.get("payment_provider", "sandbox"),
@@ -395,11 +381,6 @@ def get_available_payment_methods(order_id=None, student_id=None):
         "upi": {
             "enabled": bool(settings.get("upi_vpa")),
             "vpa": settings.get("upi_vpa"),
-        },
-        "cash": {
-            "enabled": settings.get("cash_enabled", False),
-            "max_order_paise": cash_max_paise,
-            "eligible_for_order": cash_eligible,
         },
         "sandbox": {
             "enabled": settings.get("sandbox_enabled", False),
@@ -537,59 +518,6 @@ def submit_upi_claim(internal_order_id, student_id, utr_number=None):
         changed_by=student_id,
         changed_at=now,
         notes=f"UPI payment claim submitted (UTR: {cleaned_utr or 'None'})",
-    ))
-    db.session.commit()
-    sync_order_to_firebase(order)
-    return order
-
-
-def select_cash_payment(internal_order_id, student_id):
-    """Student chooses cash payment at counter."""
-    order = Order.query.filter_by(id=internal_order_id, student_id=student_id).with_for_update().first()
-    if order is None:
-        raise OrderError("ORDER_NOT_FOUND", "Order not found.", 404)
-
-    if order.order_status != OrderStatus.PENDING_PAYMENT or order.payment_status != PaymentStatus.PENDING:
-        raise OrderError("ORDER_NOT_PAYABLE", "This order is not waiting for payment.", 409)
-
-    settings = get_canteen_settings()
-    if not settings.get("cash_enabled"):
-        raise OrderError("CASH_NOT_ENABLED", "Cash payments are currently disabled by the canteen.", 403)
-
-    cash_max_paise = settings.get("cash_max_order_paise", 15000)
-    if order.total_paise > cash_max_paise:
-        raise OrderError(
-            "CASH_LIMIT_EXCEEDED",
-            f"Cash payments are limited to maximum ₹{cash_max_paise / 100:.2f}.",
-            400,
-        )
-
-    order.payment_status = PaymentStatus.AWAITING_CONFIRMATION
-    order.payment_method = "cash"
-
-    payment = Payment.query.filter_by(order_id=order.id).first()
-    if payment is None:
-        payment = Payment(
-            order_id=order.id,
-            payment_provider="cash",
-            provider_order_id=f"cash_{order.order_number}",
-            amount_paise=order.total_paise,
-            currency=CURRENCY,
-            status=PaymentRecordStatus.AWAITING_CONFIRMATION,
-        )
-        db.session.add(payment)
-    else:
-        payment.payment_provider = "cash"
-        payment.status = PaymentRecordStatus.AWAITING_CONFIRMATION
-
-    now = utcnow()
-    db.session.add(OrderStatusHistory(
-        order_id=order.id,
-        previous_status=OrderStatus.PENDING_PAYMENT,
-        new_status=OrderStatus.PENDING_PAYMENT,
-        changed_by=student_id,
-        changed_at=now,
-        notes="Cash at counter selected",
     ))
     db.session.commit()
     sync_order_to_firebase(order)
