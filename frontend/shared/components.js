@@ -47,6 +47,13 @@
               <button class="cart-btn" id="open-cart" type="button" aria-label="Open cart">🛒
                 <span class="cart-count" id="cart-count">0</span>
               </button>
+              <a class="login-link" href="${siteUrl("loginpage.html")}" aria-label="Log in to your TrayUP account">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="8" r="3.25"></circle>
+                  <path d="M5.5 19a6.5 6.5 0 0 1 13 0"></path>
+                </svg>
+                <span>Log in</span>
+              </a>
             </nav>
           </div>
           <nav class="category-nav" aria-label="Main navigation">
