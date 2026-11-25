@@ -189,7 +189,10 @@ def create_order(student_id, raw_items, idempotency_key=None):
         db.session.rollback()
         raise
 
-    return order, raw_token
+    committed_order = db.session.get(Order, order.id)
+    if committed_order is not None:
+        sync_order_to_firebase(committed_order)
+    return committed_order or order, raw_token
 
 
 def cancel_order(order_id, staff_user_id, reason):
