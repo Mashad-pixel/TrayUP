@@ -13,7 +13,13 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", DEV_SECRET_KEY)
 
     # Relative SQLite paths are stored in the instance/ folder by Flask-SQLAlchemy.
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///canteen.db")
+    _database_url = os.getenv("DATABASE_URL", "sqlite:///canteen.db")
+    # Render Postgres may provide postgres://; normalize to SQLAlchemy's psycopg 3 driver.
+    if _database_url.startswith("postgres://"):
+        _database_url = _database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif _database_url.startswith("postgresql://"):
+        _database_url = _database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    SQLALCHEMY_DATABASE_URI = _database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     SESSION_COOKIE_HTTPONLY = True
