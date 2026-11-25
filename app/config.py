@@ -44,6 +44,16 @@ class Config:
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
+    # Universal Payment & PhonePe Settings
+    PAYMENT_DEFAULT_PROVIDER = os.getenv("PAYMENT_DEFAULT_PROVIDER", "sandbox")
+    PAYMENT_SANDBOX_ENABLED = os.getenv("PAYMENT_SANDBOX_ENABLED", "true").lower() == "true"
+    CANTEEN_UPI_VPA = os.getenv("CANTEEN_UPI_VPA", "")
+    CANTEEN_MERCHANT_NAME = os.getenv("CANTEEN_MERCHANT_NAME", "TrayUP Canteen")
+    PHONEPE_MERCHANT_ID = os.getenv("PHONEPE_MERCHANT_ID", "")
+    PHONEPE_SALT_KEY = os.getenv("PHONEPE_SALT_KEY", "")
+    PHONEPE_SALT_INDEX = os.getenv("PHONEPE_SALT_INDEX", "1")
+    PHONEPE_ENV = os.getenv("PHONEPE_ENV", "UAT")
+
     # Firebase project endpoint is deployment configuration, not source code.
     FIREBASE_ENABLED = os.getenv("FIREBASE_ENABLED", "false").lower() == "true"
     FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "").strip()
@@ -68,11 +78,18 @@ class TestingConfig(Config):
     RAZORPAY_KEY_SECRET = ""
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"  # nosec B105
     FIREBASE_ENABLED = False
+    PAYMENT_SANDBOX_ENABLED = True
+    PHONEPE_MERCHANT_ID = "PGTESTPAYUAT"
+    PHONEPE_SALT_KEY = "test_phonepe_salt_key_1234567890"  # nosec B105
+    PHONEPE_SALT_INDEX = "1"
+    CANTEEN_UPI_VPA = "testcanteen@ybl"
+    CANTEEN_MERCHANT_NAME = "TrayUP Test Canteen"
 
 
 class ProductionConfig(Config):
     DEBUG = False
     SESSION_COOKIE_SECURE = True
+    PAYMENT_SANDBOX_ENABLED = os.getenv("PAYMENT_SANDBOX_ENABLED", "false").lower() == "true"
 
 
 config_map = {
