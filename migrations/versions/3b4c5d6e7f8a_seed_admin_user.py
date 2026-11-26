@@ -28,8 +28,8 @@ def upgrade():
     if admin_exists == 0:
         pwd_hash = generate_password_hash('AdminPass123!')
         conn.execute(sa.text("""
-            INSERT INTO users (name, email, password_hash, role, is_active, created_at, updated_at)
-            VALUES ('Demo Admin', 'admin@trayup.internal', :pwd, 'ADMIN', true, :now, :now)
+            INSERT INTO users (name, email, password_hash, role, is_active, created_at)
+            VALUES ('Demo Admin', 'admin@trayup.internal', :pwd, 'ADMIN', true, :now)
         """), {'pwd': pwd_hash, 'now': now})
 
     # Kitchen staff account
@@ -40,8 +40,8 @@ def upgrade():
     if kitchen_exists == 0:
         pwd_hash = generate_password_hash('KitchenPass123!')
         conn.execute(sa.text("""
-            INSERT INTO users (name, email, password_hash, role, is_active, created_at, updated_at)
-            VALUES ('Demo Kitchen', 'kitchen@trayup.internal', :pwd, 'KITCHEN', true, :now, :now)
+            INSERT INTO users (name, email, password_hash, role, is_active, created_at)
+            VALUES ('Demo Kitchen', 'kitchen@trayup.internal', :pwd, 'KITCHEN', true, :now)
         """), {'pwd': pwd_hash, 'now': now})
 
 
