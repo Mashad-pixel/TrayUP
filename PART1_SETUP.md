@@ -53,7 +53,7 @@ Public staff registration is intentionally disabled. Create accounts from a trus
 flask --app run.py create-user --name "Canteen Admin" --email admin@example.com --role ADMIN
 ```
 
-The command securely prompts for the password twice. Supported roles: `ADMIN`, `KITCHEN`, and `STUDENT`.
+The command securely prompts for the password twice. Supported roles: `ADMIN`, `KITCHEN`, and `STUDENT`. Administrators set up two-factor authentication at their first sign-in.
 
 ## Run the app
 
@@ -98,11 +98,37 @@ pytest
 
 Tests use isolated in-memory SQLite and cover login, sessions, disabled users, credential errors, logout, and authenticated order creation.
 
+## Load the starter menu
+
+The menu lives in the database and is edited from the admin Menu page. A new database starts empty. To load the 43 starter dishes once, run:
+
+```bash
+flask --app wsgi:app seed-menu
+```
+
+The command does nothing if the menu already has items, so it is safe to run on every deploy. Every entry goes through the same validation as the admin page.
+
+## Administrator sign-in and recovery
+
+Administrator accounts must use two-factor authentication (an authenticator app such as Google Authenticator or Aegis). The first time an administrator signs in, the sign-in page shows a setup key. They add it to the app and enter the 6-digit code to finish. Until then the account can reach only the sign-in and enrollment endpoints.
+
+If an administrator loses their phone, a server operator resets the second factor and ends that account's sessions:
+
+```bash
+flask --app wsgi:app reset-mfa --email admin@example.com
+```
+
+To end all of an account's sessions without changing its second factor, run `flask --app wsgi:app revoke-sessions --email <address>`. Run `flask --app wsgi:app prune-sessions` on a schedule to delete finished session records.
+
+Privileged sessions end after 30 minutes idle or 8 hours total. Student sessions end after 12 hours idle or 7 days total. These limits are set with `SESSION_*` environment variables.
+
 ## Production checklist
 
-- Set `FLASK_CONFIG=production` and a strong `SECRET_KEY`.
+- Set `FLASK_CONFIG=production` and a strong `SECRET_KEY` (at least 32 characters). The app refuses to start otherwise.
 - Use PostgreSQL and persistent storage.
-- Set `SESSION_COOKIE_SECURE=true` behind HTTPS.
-- Configure a shared Redis rate-limit store for multiple workers.
+- Set `SESSION_COOKIE_SECURE=true` behind HTTPS. Production enforces this.
+- Set `RATELIMIT_STORAGE_URI` to a shared Redis instance (`redis://` or `rediss://`). The app refuses to start with `memory://` in production. `render.yaml` provisions one.
+- Set `MENU_IMAGE_ALLOWED_HOSTS` to the exact image hosts you use. Menu images must be `https://` on one of these hosts, or a `/static/` path.
+- Set `CSP_REPORT_ONLY=true` to watch for policy violations before enforcing. Production enforces the policy by default.
 - Apply migrations during deployment.
-- Keep all secrets out of Git.
+- Keep all secrets out of Git. The `secret-scan` workflow checks every branch, tag and pull request.
