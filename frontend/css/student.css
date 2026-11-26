@@ -443,7 +443,7 @@
 }
 .product-gallery { grid-area: gallery; min-width: 0; position: relative; z-index: 1; }
 .product-gallery-stage { position: relative; overflow: hidden; border: 0; border-radius: 16px; background: transparent; box-shadow: none; }
-.product-gallery-track { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
+.product-gallery-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; }
 .product-gallery-track::-webkit-scrollbar,
 .related-product-track::-webkit-scrollbar { display: none; }
 .product-gallery-slide { position: relative; flex: 0 0 100%; aspect-ratio: 1.5; display: grid; place-items: center; scroll-snap-align: start; background: transparent; }

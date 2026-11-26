@@ -13,28 +13,27 @@
 <div class="field"><label for="name">Name</label><input id="name" name="name" required autocomplete="name"></div>
 <div class="field"><label for="phone">Phone number</label><input id="phone" name="phone" type="tel" required autocomplete="tel" aria-describedby="phone-error"><small id="phone-error" class="field-error" role="alert" hidden>Number is invalid</small></div>
 <div class="field"><label for="instructions">Special instructions</label><textarea id="instructions" name="instructions" rows="3" placeholder="Less spicy, no onion…"></textarea></div>
-<fieldset class="payment-method">
-<legend>Payment option</legend>
-<div class="payment-options" id="payment-options" aria-live="polite"><p>Loading payment options…</p></div>
-</fieldset>
-<button class="btn btn-primary" type="submit" style="width:100%;margin-top:10px" disabled>Continue to payment</button>
+<button class="btn btn-primary" id="checkout-submit-btn" type="submit" style="width:100%;margin-top:16px;padding:14px;font-size:16px;font-weight:600" disabled>Pay Now</button>
 <section id="upi-payment-panel" class="upi-payment-panel" aria-live="polite" hidden>
-  <h2>Pay with UPI</h2>
-  <p id="upi-order-summary"></p>
-  <div class="upi-app-links" aria-label="Open a UPI payment app">
-    <a class="btn btn-secondary" id="open-phonepe" hidden>Open PhonePe</a>
-    <a class="btn btn-secondary" id="open-gpay" hidden>Open GPay</a>
-    <a class="btn btn-secondary" id="open-paytm" hidden>Open Paytm</a>
-    <a class="btn btn-secondary" id="open-upi" hidden>Open UPI app</a>
+  <h2 style="font-size:20px;margin-bottom:8px">Complete Payment</h2>
+  <p id="upi-order-summary" style="font-size:15px;font-weight:600;margin-bottom:14px"></p>
+  <div style="margin:14px 0">
+    <a class="btn btn-primary" id="open-upi" style="display:block;text-align:center;text-decoration:none;font-size:16px;padding:13px 16px;font-weight:700;border-radius:10px">
+      ⚡ Open UPI App (GPay / PhonePe / Paytm)
+    </a>
+    <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:6px">Tap to choose which UPI app to pay with</p>
   </div>
-  <div class="upi-qr-container">
+  <div class="upi-qr-container" style="border:1px solid var(--line);border-radius:12px;padding:16px">
     <img id="upi-qr" alt="Scan this QR code with your UPI app to pay">
-    <p>Or scan this QR code with any UPI app.</p>
+    <p style="margin-top:10px;font-weight:500">Or scan this QR code with any UPI app</p>
   </div>
-  <label class="field" for="utr-number">UPI transaction ID / UTR <small>(optional)</small>
-    <input id="utr-number" type="text" maxlength="12" autocomplete="off" placeholder="12 letters or numbers">
+  <label class="field" for="utr-number" style="margin-top:16px">UPI Reference / UTR Number <small>(optional)</small>
+    <input id="utr-number" type="text" maxlength="12" autocomplete="off" placeholder="12-digit UPI reference ID">
   </label>
-  <button class="btn btn-primary" id="submit-payment-claim" type="button">I Have Paid</button>
+  <button class="btn btn-primary" id="submit-payment-claim" type="button" style="width:100%;margin-top:8px">I Have Paid</button>
+  <div id="sandbox-dev-container" style="margin-top:14px;text-align:center" hidden>
+    <button type="button" id="sandbox-pay-btn" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;opacity:0.85">⚡ Test with Sandbox Simulator (Dev)</button>
+  </div>
   <p id="upi-payment-message" role="status" aria-live="polite"></p>
 </section>
 </form>

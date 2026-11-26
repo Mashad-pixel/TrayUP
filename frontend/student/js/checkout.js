@@ -22,7 +22,6 @@
   const totalEl = document.getElementById("checkout-total");
   const totalNote = document.getElementById("total-note");
   const summaryEl = document.getElementById("summary");
-  const paymentOptionsEl = document.getElementById("payment-options");
   const paymentPanel = document.getElementById("upi-payment-panel");
 
   function renderEstimate() {
@@ -33,7 +32,6 @@
       : `<p style="color:var(--muted)">Your cart is empty</p>`;
   }
 
-  // Once the server has created the order, show its lines and total: this is what gets charged.
   function renderServerOrder(order) {
     totalEl.textContent = rupees(order.total_paise / 100);
     totalNote.textContent = "Confirmed by the server. This is the amount you will be charged.";
@@ -48,26 +46,53 @@
 </figure>`).join("");
 
   const form = document.getElementById("checkout-form");
-  const submitButton = form.querySelector('button[type="submit"]');
-  const idleLabel = submitButton.textContent;
+  const submitButton = document.getElementById("checkout-submit-btn") || form.querySelector('button[type="submit"]');
   const nameInput = document.getElementById("name");
   const phoneInput = document.getElementById("phone");
   const phoneError = document.getElementById("phone-error");
   const claimButton = document.getElementById("submit-payment-claim");
   const utrInput = document.getElementById("utr-number");
   const paymentMessage = document.getElementById("upi-payment-message");
-  let paymentMethodsLoaded = false;
-  let hasPaymentMethod = false;
-  let phoneValidationRequested = false;
+  const openUpiLink = document.getElementById("open-upi");
+  const sandboxDevContainer = document.getElementById("sandbox-dev-container");
+  const sandboxPayBtn = document.getElementById("sandbox-pay-btn");
 
-  // The server order for this checkout. Once it exists, retrying payment reuses it instead of
-  // creating another order.
+  let phoneValidationRequested = false;
   let serverOrder = null;
   let orderDetails = null;
-  // Sent as Idempotency-Key. Kept across retries until the order is created, so a double tap or
-  // a dropped response cannot create two orders.
   let idempotencyKey = null;
   let submitting = false;
+  let sandboxAvailable = false;
+
+  // Pre-fill student name & phone if available from saved storage or session
+  const savedProfile = trayStorage.get("trayup-student-profile", null);
+  if (savedProfile) {
+    if (savedProfile.name && !nameInput.value) nameInput.value = savedProfile.name;
+    if (savedProfile.phone && !phoneInput.value) phoneInput.value = savedProfile.phone;
+  }
+  trayApi.get("/auth/me").then((res) => {
+    if (res?.data) {
+      if (res.data.name && !nameInput.value) nameInput.value = res.data.name;
+      if (res.data.phone && !phoneInput.value) phoneInput.value = res.data.phone;
+      trayStorage.set("trayup-user", res.data);
+    }
+  }).catch(() => {});
+
+  // Check backend payment capabilities in background
+  trayPayment.getMethods().then((res) => {
+    sandboxAvailable = Boolean(res?.data?.sandbox?.enabled);
+  }).catch(() => {});
+
+  function updateSubmitButton() {
+    if (!cart.length) {
+      submitButton.disabled = true;
+      submitButton.textContent = "Your cart is empty";
+      return;
+    }
+    submitButton.disabled = submitting;
+    submitButton.textContent = submitting ? "Preparing payment…" : `Pay ${rupees(estimatedTotal)}`;
+  }
+  updateSubmitButton();
 
   function newIdempotencyKey() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -78,60 +103,9 @@
 
   function setBusy(busy, busyLabel) {
     submitting = busy;
-    submitButton.disabled = busy || !paymentMethodsLoaded || !hasPaymentMethod;
+    submitButton.disabled = busy;
     if (busy) submitButton.textContent = busyLabel;
-    else submitButton.textContent = serverOrder ? "Retry payment" : idleLabel;
-  }
-
-  function renderPaymentMethods(methods) {
-    const choices = [];
-    if (methods?.upi?.enabled) {
-      choices.push(`
-        <label class="payment-option">
-          <input type="radio" name="payment_method" value="upi" required>
-          <span class="payment-logo phonepe">UPI</span>
-          <span><strong>UPI / QR</strong><small>PhonePe, GPay, Paytm or any UPI app</small></span>
-        </label>`);
-    }
-    if (methods?.sandbox?.enabled) {
-      choices.push(`
-        <label class="payment-option">
-          <input type="radio" name="payment_method" value="sandbox" required>
-          <span class="payment-logo gpay">✓</span>
-          <span><strong>Test Sandbox</strong><small>Instant simulated payment for development</small></span>
-        </label>`);
-    }
-
-    if (!choices.length) {
-      paymentOptionsEl.innerHTML = '<p role="status">No digital payment methods are currently available.</p>';
-      return false;
-    }
-
-    paymentOptionsEl.innerHTML = choices.join("");
-    const selected = methods?.payment_provider === "sandbox" && methods?.sandbox?.enabled
-      ? "sandbox"
-      : choices.length === 1 && !methods?.upi?.enabled ? "sandbox" : "upi";
-    const defaultOption = paymentOptionsEl.querySelector(`input[value="${selected}"]`) ||
-      paymentOptionsEl.querySelector('input[type="radio"]');
-    if (defaultOption) defaultOption.checked = true;
-    return true;
-  }
-
-  async function loadPaymentMethods() {
-    paymentOptionsEl.textContent = "Loading payment options…";
-    try {
-      const response = await trayPayment.getMethods();
-      hasPaymentMethod = renderPaymentMethods(response?.data || {});
-      paymentMethodsLoaded = true;
-      submitButton.disabled = !hasPaymentMethod;
-      if (!hasPaymentMethod) trayNotify("No digital payment methods are available right now.");
-    } catch (error) {
-      paymentOptionsEl.innerHTML = error.status === 401
-        ? '<p>Please <a href="./login.html?next=checkout.html">sign in</a> to load payment options.</p>'
-        : '<p role="alert">Could not load payment options. Please refresh and try again.</p>';
-      submitButton.disabled = true;
-      trayNotify(error.message || "Could not load payment options.");
-    }
+    else updateSubmitButton();
   }
 
   function validatePhone(showError) {
@@ -154,13 +128,13 @@
         order_number: order.order_number,
         order_status: order.order_status,
         payment_status: order.payment_status,
-        payment_method: details.paymentMethod,
-        payment_provider: details.paymentProvider,
+        payment_method: details?.paymentMethod || "upi_soundbox",
+        payment_provider: details?.paymentProvider || "UPI / Soundbox",
         total_paise: order.total_paise,
         items: cart,
-        instructions: details.instructions,
-        student_name: details.name,
-        phone_number: details.phone,
+        instructions: details?.instructions || "",
+        student_name: details?.name || "",
+        phone_number: details?.phone || "",
         created_at: order.created_at
       }
     };
@@ -169,23 +143,13 @@
     window.location.href = confirmationUrl(saved);
   }
 
-  function setAppLink(id, uri) {
-    const link = document.getElementById(id);
-    if (!uri) {
-      link.hidden = true;
-      return;
-    }
-    link.href = uri;
-    link.hidden = false;
-  }
-
   function showUpiPayment(data) {
     document.getElementById("upi-order-summary").textContent =
       `Order ${data.order_number || serverOrder.order_number} · ${rupees(data.amount_paise / 100)}`;
-    setAppLink("open-phonepe", data.phonepe_uri);
-    setAppLink("open-gpay", data.gpay_uri);
-    setAppLink("open-paytm", data.paytm_uri);
-    setAppLink("open-upi", data.upi_uri);
+
+    if (openUpiLink) {
+      openUpiLink.href = data.upi_uri || "#";
+    }
 
     const qr = document.getElementById("upi-qr");
     if (data.qr_svg_url) {
@@ -194,24 +158,40 @@
     } else {
       qr.hidden = true;
     }
+
+    if (sandboxDevContainer && sandboxAvailable) {
+      sandboxDevContainer.hidden = false;
+    }
+
     paymentMessage.textContent = "After paying, return here and tap “I Have Paid”.";
     paymentPanel.hidden = false;
     submitButton.hidden = true;
     nameInput.disabled = true;
     phoneInput.disabled = true;
     document.getElementById("instructions").disabled = true;
-    paymentOptionsEl.querySelectorAll("input").forEach((input) => { input.disabled = true; });
+
+    // On mobile devices, automatically prompt the native OS UPI app chooser (PhonePe, GPay, Paytm, etc.)
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile && data.upi_uri) {
+      try {
+        window.location.href = data.upi_uri;
+      } catch (e) {
+        console.warn("Direct intent redirect failed, user can tap the link", e);
+      }
+    }
   }
 
   function handleError(error) {
-    if (error.status === 401) trayNotify("Sign in with a student account to place your order. You can keep browsing or choose Log in.");
-    else if (error.code === "ORDER_EXPIRED" || error.code === "ORDER_NOT_PAYABLE_REFUND_REQUIRED") {
+    if (error.status === 401) {
+      trayNotify("Sign in with a student account to place your order. You can keep browsing or choose Log in.");
+    } else if (error.code === "ORDER_EXPIRED" || error.code === "ORDER_NOT_PAYABLE_REFUND_REQUIRED") {
       serverOrder = null;
       orderDetails = null;
       renderEstimate();
       trayNotify(error.message);
-    } else trayNotify(error.message || "The order could not be placed");
-
+    } else {
+      trayNotify(error.message || "The order could not be placed");
+    }
     setBusy(false);
   }
 
@@ -222,18 +202,12 @@
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
     const instructions = document.getElementById("instructions").value.trim();
-    const selectedMethod = form.querySelector('input[name="payment_method"]:checked');
-    if (!paymentMethodsLoaded || !hasPaymentMethod || !selectedMethod) {
-      trayNotify("Payment options are not available. Please refresh and try again.");
-      return;
-    }
-    const paymentMethod = selectedMethod.value;
     const details = {
       name,
       phone,
       instructions,
-      paymentMethod,
-      paymentProvider: paymentMethod === "sandbox" ? "Test Sandbox" : "UPI / Soundbox"
+      paymentMethod: "upi_soundbox",
+      paymentProvider: "UPI / Soundbox"
     };
 
     phoneValidationRequested = true;
@@ -253,6 +227,9 @@
       return;
     }
 
+    // Remember name and phone for future orders so user is not asked again
+    trayStorage.set("trayup-student-profile", { name, phone });
+
     setBusy(true, "Placing order…");
     try {
       if (!serverOrder) {
@@ -266,26 +243,7 @@
       }
       orderDetails = details;
 
-      if (paymentMethod === "sandbox") {
-        setBusy(true, "Completing test payment…");
-        const response = await trayPayment.completeSandbox(serverOrder.id);
-        if (response?.data?.refund_required) {
-          submitting = false;
-          hasPaymentMethod = false;
-          submitButton.hidden = true;
-          paymentOptionsEl.innerHTML = 'This payment needs review. <a href="./tracking.html">Check Track orders</a>.';
-          trayNotify("This order needs staff review. Check Track orders before trying again.");
-          return;
-        }
-        completeOrder({ ...serverOrder, ...response.data }, {
-          ...details,
-          paymentMethod: "sandbox",
-          paymentProvider: "Test Sandbox"
-        });
-        return;
-      }
-
-      setBusy(true, "Preparing UPI payment…");
+      setBusy(true, "Opening payment…");
       const response = await trayPayment.initiateUpi(serverOrder.id);
       showUpiPayment(response.data);
       setBusy(false);
@@ -321,5 +279,25 @@
     }
   });
 
-  loadPaymentMethods();
+  if (sandboxPayBtn) {
+    sandboxPayBtn.addEventListener("click", async () => {
+      if (!serverOrder || submitting) return;
+      submitting = true;
+      sandboxPayBtn.disabled = true;
+      paymentMessage.textContent = "Simulating instant test payment…";
+      try {
+        const response = await trayPayment.completeSandbox(serverOrder.id);
+        completeOrder({ ...serverOrder, ...response.data }, {
+          ...orderDetails,
+          paymentMethod: "sandbox",
+          paymentProvider: "Test Sandbox"
+        });
+      } catch (error) {
+        paymentMessage.textContent = error.message || "Sandbox payment failed.";
+        sandboxPayBtn.disabled = false;
+      } finally {
+        submitting = false;
+      }
+    });
+  }
 })();
