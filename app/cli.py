@@ -1,9 +1,15 @@
+import json
+import os
+
 import click
 from flask.cli import with_appcontext
 
 from app.extensions import db
+from app.models.menu import MenuItem
 from app.models.user import User, UserRole
 from app.services.order_service import expire_unpaid_orders
+from app.services.menu_service import MenuValidationError, create_menu_item, validate_menu_payload
+from app.services.session_service import prune_sessions, revoke_user_sessions
 from app.security.account_rules import is_valid_email, is_valid_name, normalize_email, password_problem
 
 
@@ -61,68 +67,84 @@ def expire_orders_command():
     click.echo(f"Expired {count} unpaid order(s).")
 
 
-@click.command("seed-demo")
+def _user_by_email(email):
+    user = User.query.filter_by(email=normalize_email(email)).first()
+    if user is None:
+        raise click.ClickException("No user has that email address.")
+    return user
+
+
+@click.command("reset-mfa")
+@click.option("--email", required=True, help="Account whose authenticator must be re-enrolled.")
 @with_appcontext
-def seed_demo_command():
-    """Seed sample users, canteen settings, and menu items for local testing."""
-    from app.models.canteen import CanteenSettings
-    from app.models.menu import MenuItem
+def reset_mfa_command(email):
+    """Remove an account's two-factor setup (for a lost phone) and end its sessions.
 
-    roles = [
-        ("Demo Admin", "admin@trayup.internal", UserRole.ADMIN, "AdminPass123!"),
-        ("Demo Kitchen", "kitchen@trayup.internal", UserRole.KITCHEN, "KitchenPass123!"),
-        ("Demo Student", "student@trayup.internal", UserRole.STUDENT, "StudentPass123!"),
-    ]
-    for name, email, role, pwd in roles:
-        if not User.query.filter_by(email=email).first():
-            u = User(name=name, email=email, role=role, is_active=True)
-            u.set_password(pwd)
-            db.session.add(u)
-            click.echo(f"Created {role} {email}")
-
-    settings = db.session.get(CanteenSettings, 1)
-    if not settings:
-        settings = CanteenSettings(
-            id=1,
-            is_accepting_orders=True,
-            payment_provider="sandbox",
-            merchant_display_name="Campus Canteen",
-            upi_vpa="canteen@ybl",
-            cash_enabled=False,
-            cash_max_order_paise=20000,
-        )
-        db.session.add(settings)
-        click.echo("Created default CanteenSettings")
-
-    if MenuItem.query.count() == 0:
-        from app.seed_data import DEMO_PRODUCTS
-
-        demo_items = [
-            MenuItem(
-                id=item["id"],
-                name=item["name"],
-                category=item["category"],
-                price_paise=item["price_paise"],
-                description=item["description"],
-                image_url=item["image_url"],
-                is_available=True,
-            )
-            for item in DEMO_PRODUCTS
-        ]
-        db.session.add_all(demo_items)
-        db.session.flush()
-
-        if db.session.bind and db.session.bind.dialect.name == "postgresql":
-            db.session.execute(
-                db.text("SELECT setval(pg_get_serial_sequence('menu_items', 'id'), COALESCE(MAX(id), 1)) FROM menu_items;")
-            )
-        click.echo(f"Added {len(demo_items)} demo menu items")
-
+    The account must enroll again at its next sign-in.
+    """
+    user = _user_by_email(email)
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    user.mfa_last_step = None
+    user.mfa_failed_attempts = 0
+    user.mfa_locked_until = None
     db.session.commit()
-    click.echo("Demo data seeded successfully.")
+    revoked = revoke_user_sessions(user.id)
+    click.echo(f"Reset two-factor authentication for {user.email}. Revoked {revoked} session(s).")
+
+
+@click.command("revoke-sessions")
+@click.option("--email", required=True, help="Account whose live sessions should end immediately.")
+@with_appcontext
+def revoke_sessions_command(email):
+    user = _user_by_email(email)
+    revoked = revoke_user_sessions(user.id)
+    click.echo(f"Revoked {revoked} session(s) for {user.email}.")
+
+
+@click.command("prune-sessions")
+@with_appcontext
+def prune_sessions_command():
+    """Delete expired and revoked session rows. Run this on a schedule."""
+    removed = prune_sessions()
+    click.echo(f"Removed {removed} finished session(s).")
+
+
+SEED_MENU_PATH = os.path.join(os.path.dirname(__file__), "data", "menu_seed.json")
+
+
+@click.command("seed-menu")
+@with_appcontext
+def seed_menu_command():
+    """Load the starter menu into an empty database. Does nothing if any menu item exists.
+
+    Every entry goes through the same validation as the admin API, and all entries are
+    checked before any are written.
+    """
+    if MenuItem.query.first() is not None:
+        click.echo("The menu already has items. Nothing was loaded.")
+        return
+
+    with open(SEED_MENU_PATH, encoding="utf-8") as handle:
+        entries = json.load(handle)
+
+    for index, entry in enumerate(entries, start=1):
+        try:
+            validate_menu_payload(entry)
+        except MenuValidationError as exc:
+            raise click.ClickException(
+                f"Seed entry {index} ({entry.get('name')!r}) is invalid: {exc.errors}"
+            )
+
+    for entry in entries:
+        create_menu_item(entry)
+    click.echo(f"Loaded {len(entries)} menu items.")
 
 
 def register_cli(app):
+    app.cli.add_command(seed_menu_command)
     app.cli.add_command(create_user_command)
     app.cli.add_command(expire_orders_command)
-    app.cli.add_command(seed_demo_command)
+    app.cli.add_command(reset_mfa_command)
+    app.cli.add_command(revoke_sessions_command)
+    app.cli.add_command(prune_sessions_command)

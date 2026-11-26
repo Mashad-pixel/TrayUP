@@ -11,8 +11,9 @@ from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment, PaymentRecordStatus
 from app.services.collection_service import expire_collection_tokens
-from app.services.canteen_service import is_accepting_orders
+from app.services.canteen_service import get_status
 from app.services.errors import OrderError
+from app.services.order_details import CustomerDetails, request_fingerprint
 from app.services.inventory_service import release_reservations, reserve_stock, return_sold_stock
 from app.services.pricing_service import normalize_requested_items, price_order
 from app.services.time_utils import as_utc, utcnow
@@ -46,6 +47,36 @@ def _validate_idempotency_key(key):
 
 def _find_existing_order(student_id, key):
     return Order.query.filter_by(student_id=student_id, idempotency_key=key).first()
+
+
+def _assert_same_request(existing, requested, fingerprint):
+    """A reused key must carry the same request. Otherwise it would return the wrong order."""
+    if existing.request_fingerprint is not None:
+        same = existing.request_fingerprint == fingerprint
+    else:
+        # Orders made before fingerprints existed: compare the items only.
+        stored = sorted((line.menu_item_id, line.quantity) for line in existing.items)
+        same = stored == sorted(requested)
+    if not same:
+        raise OrderError(
+            "IDEMPOTENCY_KEY_REUSED",
+            "This Idempotency-Key was already used for a different order.",
+            409,
+        )
+
+
+def _reuse_existing(existing, requested, fingerprint):
+    """Check a reused key before returning its order. The request must match, and the order must still be live.
+
+    A cancelled order can never be paid, so returning it would leave the student stuck on it.
+    """
+    _assert_same_request(existing, requested, fingerprint)
+    if existing.order_status == OrderStatus.CANCELLED:
+        raise OrderError(
+            "ORDER_CANCELLED",
+            "This order was cancelled. Place a new order.",
+            409,
+        )
 
 
 def payment_window_closed(order, now=None):
@@ -116,25 +147,31 @@ def _sweep_expired_orders_safely():
         current_app.logger.exception("Could not expire unpaid orders before creating a new order.")
 
 
-def create_order(student_id, raw_items, idempotency_key=None):
+def create_order(student_id, raw_items, idempotency_key=None, customer=None):
     """Create a pending_payment order and reserve its stock in one transaction.
 
     Returns (order, raw_tracking_token). raw_tracking_token is None when an existing
     order is returned for a retried key, because the raw token was shown the first time.
+    A reused key with a different request raises IDEMPOTENCY_KEY_REUSED (409).
     """
     key = _validate_idempotency_key(idempotency_key)
+    customer = customer or CustomerDetails()
+
+    requested = normalize_requested_items(raw_items)
+    fingerprint = request_fingerprint(requested, customer)
 
     if key:
         existing = _find_existing_order(student_id, key)
         if existing:
+            _reuse_existing(existing, requested, fingerprint)
             return existing, None
 
-    requested = normalize_requested_items(raw_items)
-
-    if not is_accepting_orders():
+    canteen = get_status()
+    if not canteen["is_accepting_orders"]:
+        # Show the message the canteen staff wrote, if they wrote one.
         raise OrderError(
             "CANTEEN_CLOSED",
-            "The canteen is not accepting new orders right now.",
+            canteen["message"] or "The canteen is not accepting new orders right now.",
             409,
         )
 
@@ -154,6 +191,10 @@ def create_order(student_id, raw_items, idempotency_key=None):
         payment_status=PaymentStatus.PENDING,
         order_status=OrderStatus.PENDING_PAYMENT,
         tracking_token_hash=_hash_token(raw_token),
+        request_fingerprint=fingerprint,
+        customer_name=customer.name,
+        customer_phone=customer.phone,
+        instructions=customer.instructions,
     )
 
     for line in priced.lines:
@@ -178,6 +219,7 @@ def create_order(student_id, raw_items, idempotency_key=None):
         if key:
             existing = _find_existing_order(student_id, key)
             if existing:
+                _reuse_existing(existing, requested, fingerprint)
                 return existing, None
         raise OrderError(
             "ORDER_CREATE_FAILED",

@@ -152,3 +152,82 @@ def reconcile_refund_status(payment_id):
             r.amount_paise for r in refunds if r.status == RefundStatus.PROCESSED
         ),
     }
+
+
+REFUNDABLE_RECORD_STATUSES = (
+    PaymentRecordStatus.PAID,
+    PaymentRecordStatus.REFUND_REQUIRED,
+    PaymentRecordStatus.PARTIALLY_REFUNDED,
+)
+
+
+def list_payment_summaries(limit=50):
+    """Recent payments with their refund totals and what can still be refunded (admin view).
+
+    Refund totals are summed in one grouped query, so the list does not query once per payment.
+    """
+    from sqlalchemy import func
+
+    payments = Payment.query.order_by(Payment.created_at.desc(), Payment.id.desc()).limit(limit).all()
+    if not payments:
+        return []
+
+    payment_ids = [payment.id for payment in payments]
+    totals = {}
+    for payment_id, status, total in (
+        db.session.query(Refund.payment_id, Refund.status, func.sum(Refund.amount_paise))
+        .filter(Refund.payment_id.in_(payment_ids))
+        .group_by(Refund.payment_id, Refund.status)
+        .all()
+    ):
+        totals.setdefault(payment_id, {})[status] = int(total or 0)
+
+    orders = {order.id: order for order in Order.query.filter(Order.id.in_({p.order_id for p in payments})).all()}
+
+    summaries = []
+    for payment in payments:
+        order = orders.get(payment.order_id)
+        paid_back = totals.get(payment.id, {}).get(RefundStatus.PROCESSED, 0)
+        waiting = totals.get(payment.id, {}).get(RefundStatus.PENDING, 0)
+        refundable = (
+            max(0, payment.amount_paise - paid_back - waiting)
+            if payment.status in REFUNDABLE_RECORD_STATUSES else 0
+        )
+        summaries.append({
+            "payment_id": payment.id,
+            "order_id": payment.order_id,
+            "order_number": order.order_number if order else None,
+            "order_status": order.order_status if order else None,
+            "payment_status": payment.status,
+            "currency": payment.currency,
+            "amount_paise": payment.amount_paise,
+            "refunded_paise": paid_back,
+            "pending_refund_paise": waiting,
+            "refundable_paise": refundable,
+            "created_at": payment.created_at.isoformat() if payment.created_at else None,
+        })
+    return summaries
+
+
+def list_recent_refunds(limit=50):
+    rows = (
+        db.session.query(Refund, Order.order_number)
+        .join(Order, Order.id == Refund.order_id)
+        .order_by(Refund.created_at.desc(), Refund.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": refund.id,
+            "payment_id": refund.payment_id,
+            "order_number": order_number,
+            "amount_paise": refund.amount_paise,
+            "status": refund.status,
+            "reason": refund.reason,
+            "requested_by": refund.requested_by,
+            "created_at": refund.created_at.isoformat() if refund.created_at else None,
+            "processed_at": refund.processed_at.isoformat() if refund.processed_at else None,
+        }
+        for refund, order_number in rows
+    ]

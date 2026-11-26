@@ -14,7 +14,6 @@ class OrderStatus:
 
 class PaymentStatus:
     PENDING = "pending"
-    AWAITING_CONFIRMATION = "awaiting_confirmation"
     PAID = "paid"
     FAILED = "failed"
     REFUNDED = "refunded"
@@ -53,6 +52,15 @@ class Order(db.Model):
     # Client-supplied Idempotency-Key header. Unique per student.
     idempotency_key = db.Column(db.String(64), nullable=True)
 
+    # Hash of the items and checkout details sent with the key. A reused key with a different
+    # request is refused. Orders created before this column existed have NULL here.
+    request_fingerprint = db.Column(db.String(64), nullable=True)
+
+    # Checkout details the student typed. Stored as entered (name trimmed, phone normalised).
+    customer_name = db.Column(db.String(100), nullable=True)
+    customer_phone = db.Column(db.String(20), nullable=True)
+    instructions = db.Column(db.String(500), nullable=True)
+
     subtotal_paise = db.Column(db.Integer, nullable=False, default=0)
     discount_paise = db.Column(db.Integer, nullable=False, default=0)
     tax_paise = db.Column(db.Integer, nullable=False, default=0)
@@ -64,8 +72,6 @@ class Order(db.Model):
         default=PaymentStatus.PENDING,
         index=True,
     )
-    payment_method = db.Column(db.String(32), nullable=True)
-    utr_number = db.Column(db.String(32), unique=True, nullable=True, index=True)
     order_status = db.Column(
         db.String(30),
         nullable=False,

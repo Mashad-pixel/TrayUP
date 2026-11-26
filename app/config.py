@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -9,8 +10,25 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 DEV_SECRET_KEY = "dev-only-change-me"  # nosec B105
 
 
+def _positive_int_env(name, default):
+    value = int(os.getenv(name, str(default)))
+    if value < 1:
+        raise ValueError(f"{name} must be a positive integer.")
+    return value
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", DEV_SECRET_KEY)
+
+    # Email for password-recovery codes. "smtp" sends real mail; "console" writes the message to
+    # the log (development only); "memory" collects messages in tests.
+    MAIL_BACKEND = os.getenv("MAIL_BACKEND", "smtp")
+    MAIL_HOST = os.getenv("MAIL_HOST", "")
+    MAIL_PORT = _positive_int_env("MAIL_PORT", 587)
+    MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
+    MAIL_FROM = os.getenv("MAIL_FROM", "")
+    MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
 
     _database_url = os.getenv("DATABASE_URL", "sqlite:///canteen.db")
     # Normalize Render's Postgres URL to SQLAlchemy's psycopg 3 driver.
@@ -27,6 +45,32 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = False
+    # Longest a browser keeps the session cookie. The server enforces the real limits per
+    # session (see the SESSION_* lifetimes below), so this is only an upper bound.
+    PERMANENT_SESSION_LIFETIME = timedelta(days=7)
+
+    # Server-side session lifetimes. Privileged roles get short idle and absolute limits.
+    SESSION_IDLE_MINUTES_PRIVILEGED = _positive_int_env("SESSION_IDLE_MINUTES_PRIVILEGED", 30)
+    SESSION_ABSOLUTE_HOURS_PRIVILEGED = _positive_int_env("SESSION_ABSOLUTE_HOURS_PRIVILEGED", 8)
+    SESSION_IDLE_MINUTES_STUDENT = _positive_int_env("SESSION_IDLE_MINUTES_STUDENT", 720)
+    SESSION_ABSOLUTE_HOURS_STUDENT = _positive_int_env("SESSION_ABSOLUTE_HOURS_STUDENT", 168)
+
+    # Administrator two-factor authentication: how long a password step stays valid while
+    # the code is entered, and how many wrong codes lock the account for a while.
+    MFA_PENDING_MINUTES = _positive_int_env("MFA_PENDING_MINUTES", 5)
+    MFA_MAX_FAILED_ATTEMPTS = _positive_int_env("MFA_MAX_FAILED_ATTEMPTS", 5)
+    MFA_LOCKOUT_MINUTES = _positive_int_env("MFA_LOCKOUT_MINUTES", 15)
+
+    # Content-Security-Policy. Report-only is for rollout checks; production enforces.
+    CSP_REPORT_ONLY = os.getenv("CSP_REPORT_ONLY", "false").lower() == "true"
+    CSP_UPGRADE_INSECURE = False
+
+    # Hosts that menu item images may be loaded from. Exact hostnames only.
+    MENU_IMAGE_ALLOWED_HOSTS = [
+        host.strip()
+        for host in os.getenv("MENU_IMAGE_ALLOWED_HOSTS", "images.unsplash.com").split(",")
+        if host.strip()
+    ]
 
     RATELIMIT_ENABLED = True
     # For production with multiple workers/instances, configure a shared Redis store.
@@ -44,16 +88,6 @@ class Config:
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
-    # Universal Payment & PhonePe Settings
-    PAYMENT_DEFAULT_PROVIDER = os.getenv("PAYMENT_DEFAULT_PROVIDER", "sandbox")
-    PAYMENT_SANDBOX_ENABLED = os.getenv("PAYMENT_SANDBOX_ENABLED", "true").lower() == "true"
-    CANTEEN_UPI_VPA = os.getenv("CANTEEN_UPI_VPA", "")
-    CANTEEN_MERCHANT_NAME = os.getenv("CANTEEN_MERCHANT_NAME", "TrayUP Canteen")
-    PHONEPE_MERCHANT_ID = os.getenv("PHONEPE_MERCHANT_ID", "")
-    PHONEPE_SALT_KEY = os.getenv("PHONEPE_SALT_KEY", "")
-    PHONEPE_SALT_INDEX = os.getenv("PHONEPE_SALT_INDEX", "1")
-    PHONEPE_ENV = os.getenv("PHONEPE_ENV", "UAT")
-
     # Firebase project endpoint is deployment configuration, not source code.
     FIREBASE_ENABLED = os.getenv("FIREBASE_ENABLED", "false").lower() == "true"
     FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "").strip()
@@ -65,6 +99,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
+    MAIL_BACKEND = os.getenv("MAIL_BACKEND", "console")
 
 
 class TestingConfig(Config):
@@ -78,18 +113,13 @@ class TestingConfig(Config):
     RAZORPAY_KEY_SECRET = ""  # nosec B105 - intentionally empty in tests; never a usable credential.
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"  # nosec B105
     FIREBASE_ENABLED = False
-    PAYMENT_SANDBOX_ENABLED = True
-    PHONEPE_MERCHANT_ID = "PGTESTPAYUAT"
-    PHONEPE_SALT_KEY = "test_phonepe_salt_key_1234567890"  # nosec B105
-    PHONEPE_SALT_INDEX = "1"
-    CANTEEN_UPI_VPA = "testcanteen@ybl"
-    CANTEEN_MERCHANT_NAME = "TrayUP Test Canteen"
+    MAIL_BACKEND = "memory"
 
 
 class ProductionConfig(Config):
     DEBUG = False
     SESSION_COOKIE_SECURE = True
-    PAYMENT_SANDBOX_ENABLED = os.getenv("PAYMENT_SANDBOX_ENABLED", "false").lower() == "true"
+    CSP_UPGRADE_INSECURE = True
 
 
 config_map = {

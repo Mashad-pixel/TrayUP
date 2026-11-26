@@ -1,4 +1,5 @@
 from app.models.user import User, UserRole
+from app.models.user_session import UserSession
 from app.models.canteen import CanteenSettings
 from app.models.menu import MenuItem
 from app.models.order import Order, OrderStatus, PaymentStatus
@@ -14,6 +15,7 @@ from app.models.refund import Refund, RefundStatus
 __all__ = [
     "User",
     "UserRole",
+    "UserSession",
     "CanteenSettings",
     "MenuItem",
     "Order",

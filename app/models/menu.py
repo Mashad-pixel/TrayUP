@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import JSON
+
 from app.extensions import db
 
 
@@ -34,6 +36,13 @@ class MenuItem(db.Model):
 
     image_url = db.Column(db.String(500), nullable=True)
     is_available = db.Column(db.Boolean, nullable=False, default=True)
+
+    # Diet is None when the canteen has not recorded it. Such items are not listed under
+    # either the veg or non-veg filter.
+    is_veg = db.Column(db.Boolean, nullable=True)
+    ingredients = db.Column(JSON, nullable=True)
+    preparation = db.Column(db.Text, nullable=True)
+    recipe_steps = db.Column(JSON, nullable=True)
 
     # NULL means the item is not stock-tracked.
     stock_quantity = db.Column(db.Integer, nullable=True)

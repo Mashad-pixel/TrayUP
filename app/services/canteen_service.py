@@ -1,133 +1,101 @@
-from flask import current_app
-
 from app.extensions import db
 from app.models.canteen import CanteenSettings
+from app.security.admin_rules import CANTEEN_NAME_MAX_LENGTH, check_hours_pair, clean_canteen_name, clean_hhmm
 from app.services.errors import ServiceValidationError
 
 SINGLETON_ID = 1
 CLOSED_MESSAGE_MAX_LENGTH = 200
+DEFAULT_CANTEEN_NAME = "TrayUP Canteen"
 ALLOWED_FIELDS = frozenset({"is_accepting_orders", "closed_message"})
-SETTINGS_ALLOWED_FIELDS = frozenset({
-    "is_accepting_orders",
-    "closed_message",
-    "payment_provider",
-    "merchant_display_name",
-    "upi_vpa",
-    "cash_enabled",
-    "cash_max_order_paise",
-})
-VALID_PAYMENT_PROVIDERS = frozenset({"sandbox", "phonepe", "razorpay"})
+DETAIL_FIELDS = frozenset({"canteen_name", "opens_at", "closes_at"})
 
 
-def get_canteen_settings():
-    """Retrieve full canteen settings including payment and cash configuration."""
-    settings = db.session.get(CanteenSettings, SINGLETON_ID)
+def _settings_row():
+    return db.session.get(CanteenSettings, SINGLETON_ID)
+
+
+def _details(settings):
     if settings is None:
-        settings = CanteenSettings(
-            id=SINGLETON_ID,
-            is_accepting_orders=True,
-            closed_message=None,
-            payment_provider=current_app.config.get("PAYMENT_DEFAULT_PROVIDER", "sandbox"),
-            merchant_display_name=current_app.config.get("CANTEEN_MERCHANT_NAME", "TrayUP Canteen"),
-            upi_vpa=current_app.config.get("CANTEEN_UPI_VPA") or None,
-            cash_enabled=False,
-            cash_max_order_paise=15000,
-        )
-        db.session.add(settings)
-        db.session.commit()
-
+        return {"canteen_name": DEFAULT_CANTEEN_NAME, "opens_at": None, "closes_at": None}
     return {
-        "is_accepting_orders": settings.is_accepting_orders,
-        "closed_message": settings.closed_message,
-        "payment_provider": settings.payment_provider,
-        "merchant_display_name": settings.merchant_display_name,
-        "upi_vpa": settings.upi_vpa,
-        "cash_enabled": settings.cash_enabled,
-        "cash_max_order_paise": settings.cash_max_order_paise,
-        "sandbox_enabled": current_app.config.get("PAYMENT_SANDBOX_ENABLED", False),
+        "canteen_name": settings.canteen_name,
+        "opens_at": settings.opens_at,
+        "closes_at": settings.closes_at,
     }
 
 
-def update_canteen_settings(data):
-    """Update general and payment configuration for the canteen."""
-    errors = {}
-    unknown = sorted(set(data) - SETTINGS_ALLOWED_FIELDS)
-    if unknown:
-        errors["unknown_fields"] = f"Unsupported fields: {', '.join(unknown)}."
-
-    if "is_accepting_orders" in data and not isinstance(data["is_accepting_orders"], bool):
-        errors["is_accepting_orders"] = "Must be true or false."
-
-    if "closed_message" in data:
-        msg = data["closed_message"]
-        if msg is not None and not isinstance(msg, str):
-            errors["closed_message"] = "Must be a string."
-        elif isinstance(msg, str) and len(msg.strip()) > CLOSED_MESSAGE_MAX_LENGTH:
-            errors["closed_message"] = f"Must be at most {CLOSED_MESSAGE_MAX_LENGTH} characters."
-
-    if "payment_provider" in data:
-        prov = str(data["payment_provider"]).lower().strip()
-        if prov not in VALID_PAYMENT_PROVIDERS:
-            errors["payment_provider"] = f"Must be one of: {', '.join(sorted(VALID_PAYMENT_PROVIDERS))}."
-
-    if "merchant_display_name" in data:
-        name = data["merchant_display_name"]
-        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 100:
-            errors["merchant_display_name"] = "Must be a string between 1 and 100 characters."
-
-    if "upi_vpa" in data:
-        vpa = data["upi_vpa"]
-        if vpa is not None:
-            if not isinstance(vpa, str) or "@" not in vpa or len(vpa.strip()) > 100:
-                errors["upi_vpa"] = "Must be a valid UPI VPA containing '@' or null."
-
-    if "cash_enabled" in data and not isinstance(data["cash_enabled"], bool):
-        errors["cash_enabled"] = "Must be true or false."
-
-    if "cash_max_order_paise" in data:
-        val = data["cash_max_order_paise"]
-        if not isinstance(val, int) or val < 0:
-            errors["cash_max_order_paise"] = "Must be a non-negative integer in paise."
-
-    if errors:
-        raise ServiceValidationError(errors, "Canteen settings update is invalid.")
-
-    settings = db.session.get(CanteenSettings, SINGLETON_ID)
-    if settings is None:
-        settings = CanteenSettings(id=SINGLETON_ID)
-        db.session.add(settings)
-
-    if "is_accepting_orders" in data:
-        settings.is_accepting_orders = data["is_accepting_orders"]
-    if "closed_message" in data:
-        msg = data["closed_message"]
-        settings.closed_message = msg.strip() if isinstance(msg, str) and msg.strip() else None
-    if "payment_provider" in data:
-        settings.payment_provider = str(data["payment_provider"]).lower().strip()
-    if "merchant_display_name" in data:
-        settings.merchant_display_name = str(data["merchant_display_name"]).strip()
-    if "upi_vpa" in data:
-        vpa = data["upi_vpa"]
-        settings.upi_vpa = str(vpa).strip() if isinstance(vpa, str) and vpa.strip() else None
-    if "cash_enabled" in data:
-        settings.cash_enabled = data["cash_enabled"]
-    if "cash_max_order_paise" in data:
-        settings.cash_max_order_paise = data["cash_max_order_paise"]
-
-    db.session.commit()
-    return get_canteen_settings()
-
-
 def get_status():
-    """The canteen is open unless an admin has explicitly closed it."""
-    settings = db.session.get(CanteenSettings, SINGLETON_ID)
+    """The canteen is open unless an admin has explicitly closed it. Name and hours are public."""
+    settings = _settings_row()
+    details = _details(settings)
     if settings is None or settings.is_accepting_orders:
-        return {"is_accepting_orders": True, "message": None}
-    return {"is_accepting_orders": False, "message": settings.closed_message}
+        return {"is_accepting_orders": True, "message": None, **details}
+    return {"is_accepting_orders": False, "message": settings.closed_message, **details}
 
 
 def is_accepting_orders():
     return get_status()["is_accepting_orders"]
+
+
+def get_settings():
+    """Every canteen setting an administrator can edit."""
+    settings = _settings_row()
+    status = get_status()
+    return {
+        **_details(settings),
+        "is_accepting_orders": status["is_accepting_orders"],
+        "closed_message": status["message"],
+    }
+
+
+def update_details(data):
+    """Change the name and/or hours. Only the fields present in data are changed."""
+    errors = {}
+    unknown = sorted(set(data) - DETAIL_FIELDS)
+    if unknown:
+        errors["unknown_fields"] = f"Unsupported fields: {', '.join(unknown)}."
+    if not data:
+        errors["body"] = "Provide at least one field to update."
+
+    current = _settings_row()
+    current_details = _details(current)
+    name = current_details["canteen_name"]
+    opens_at = current_details["opens_at"]
+    closes_at = current_details["closes_at"]
+
+    if "canteen_name" in data:
+        try:
+            name = clean_canteen_name(data["canteen_name"])
+        except ValueError as exc:
+            errors["canteen_name"] = str(exc)
+    if "opens_at" in data:
+        try:
+            opens_at = clean_hhmm(data["opens_at"])
+        except ValueError as exc:
+            errors["opens_at"] = str(exc)
+    if "closes_at" in data:
+        try:
+            closes_at = clean_hhmm(data["closes_at"])
+        except ValueError as exc:
+            errors["closes_at"] = str(exc)
+
+    if not errors:
+        problem = check_hours_pair(opens_at, closes_at)
+        if problem:
+            errors["hours"] = problem
+
+    if errors:
+        raise ServiceValidationError(errors, "Canteen details are invalid.")
+
+    settings = current
+    if settings is None:
+        settings = CanteenSettings(id=SINGLETON_ID)
+        db.session.add(settings)
+    settings.canteen_name = name
+    settings.opens_at = opens_at
+    settings.closes_at = closes_at
+    db.session.commit()
+    return get_settings()
 
 
 def update_status(data):
@@ -153,7 +121,7 @@ def update_status(data):
     is_open = data["is_accepting_orders"]
     cleaned_message = message.strip() if isinstance(message, str) and message.strip() else None
 
-    settings = db.session.get(CanteenSettings, SINGLETON_ID)
+    settings = _settings_row()
     if settings is None:
         settings = CanteenSettings(id=SINGLETON_ID)
         db.session.add(settings)

@@ -5,11 +5,7 @@ from app.models.menu import MenuItem
 from app.models.user import UserRole
 from app.responses import error_response
 from app.security.permissions import roles_required
-from app.services.canteen_service import (
-    get_canteen_settings,
-    update_canteen_settings,
-    update_status,
-)
+from app.services.canteen_service import update_status
 from app.services.errors import ServiceValidationError
 from app.services.firebase_service import firebase_connection_status
 from app.services.menu_service import (
@@ -85,28 +81,6 @@ def update_canteen_status():
     except ServiceValidationError as exc:
         return _validation_error(exc.errors)
     return jsonify(status), 200
-
-
-@admin_bp.get("/canteen/settings")
-@login_required
-@roles_required(UserRole.ADMIN)
-def admin_canteen_settings():
-    settings = get_canteen_settings()
-    return jsonify(settings), 200
-
-
-@admin_bp.patch("/canteen/settings")
-@login_required
-@roles_required(UserRole.ADMIN)
-def update_admin_canteen_settings():
-    data = _json_object()
-    if data is None:
-        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
-    try:
-        settings = update_canteen_settings(data)
-    except ServiceValidationError as exc:
-        return _validation_error(exc.errors)
-    return jsonify(settings), 200
 
 
 @admin_bp.get("/firebase/status")

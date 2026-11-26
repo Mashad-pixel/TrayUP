@@ -10,11 +10,9 @@ from app.services.errors import OrderError
 from app.services.kitchen_service import (
     change_order_status,
     get_kitchen_queue,
-    get_pending_confirmation_orders,
     parse_queue_limit,
 )
 from app.services.order_serializer import serialize_order
-from app.services.payment_service import confirm_manual_payment, reject_manual_payment
 
 kitchen_bp = Blueprint("kitchen", __name__, url_prefix="/api/kitchen")
 
@@ -111,53 +109,3 @@ def confirm_collection_code():
         return _order_error(exc)
 
     return success_response("Order collected", serialize_order(order))
-
-
-@kitchen_bp.route("/orders/pending-confirmation", methods=["GET"])
-@login_required
-@roles_required(*KITCHEN_ACCESS)
-def orders_pending_confirmation():
-    try:
-        limit = parse_queue_limit(request.args.get("limit"))
-        orders = get_pending_confirmation_orders(limit)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("Orders awaiting payment confirmation retrieved", {
-        "orders": [serialize_order(order) for order in orders],
-        "count": len(orders),
-        "limit": limit,
-    })
-
-
-@kitchen_bp.route("/orders/<int:order_id>/confirm-payment", methods=["POST"])
-@login_required
-@roles_required(*KITCHEN_ACCESS)
-def confirm_order_payment(order_id):
-    payload = request.get_json(silent=True) or {}
-    notes = payload.get("notes") if isinstance(payload, dict) else None
-
-    try:
-        order, refund_required = confirm_manual_payment(order_id, current_user.id, notes=notes)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("Payment confirmed successfully", {
-        "order": serialize_order(order),
-        "refund_required": refund_required,
-    })
-
-
-@kitchen_bp.route("/orders/<int:order_id>/reject-payment", methods=["POST"])
-@login_required
-@roles_required(*KITCHEN_ACCESS)
-def reject_order_payment(order_id):
-    payload = request.get_json(silent=True) or {}
-    reason = payload.get("reason") if isinstance(payload, dict) else None
-
-    try:
-        order = reject_manual_payment(order_id, current_user.id, reason=reason)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("Payment rejected and order cancelled", serialize_order(order))

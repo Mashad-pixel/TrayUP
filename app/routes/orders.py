@@ -7,6 +7,7 @@ from app.security.permissions import roles_required
 from app.responses import error_response, success_response
 from app.services.collection_service import as_utc, get_student_collection_qr
 from app.services.errors import OrderError
+from app.services.order_details import parse_customer_details
 from app.services.order_query_service import (
     get_order_for_student,
     list_orders_for_student,
@@ -33,10 +34,12 @@ def create_order_route():
         return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
 
     try:
+        customer = parse_customer_details(payload)
         order, raw_token = create_order(
             student_id=current_user.id,
             raw_items=payload.get("items"),
             idempotency_key=request.headers.get("Idempotency-Key"),
+            customer=customer,
         )
     except OrderError as exc:
         return _order_error(exc)

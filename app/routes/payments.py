@@ -1,6 +1,6 @@
 import json
 
-from flask import Blueprint, Response, current_app, request
+from flask import Blueprint, current_app, request
 from flask_login import current_user, login_required
 
 from app.extensions import csrf, limiter
@@ -11,14 +11,8 @@ from app.services.errors import OrderError
 from app.services.payment_service import (
     LATE_PAYMENT_CODE,
     LATE_PAYMENT_MESSAGE,
-    complete_sandbox_payment,
     create_payment_order,
-    get_available_payment_methods,
-    get_order_upi_qr_svg,
-    initiate_upi_order,
-    process_phonepe_webhook,
     process_webhook,
-    submit_upi_claim,
     verify_checkout,
     verify_webhook_signature,
 )
@@ -151,119 +145,3 @@ def razorpay_webhook():
         return error_response("WEBHOOK_PROCESSING_FAILED", "Could not process the event.", 500)
 
     return success_response("Webhook received", {"event_id": event_id, "outcome": outcome})
-
-
-@payments_bp.route("/methods", methods=["GET"])
-@login_required
-@roles_required(UserRole.STUDENT)
-def payment_methods():
-    order_id = request.args.get("order_id", type=int)
-    methods = get_available_payment_methods(order_id=order_id, student_id=current_user.id)
-    return success_response("Payment methods retrieved", methods)
-
-
-@payments_bp.route("/upi/initiate", methods=["POST"])
-@login_required
-@roles_required(UserRole.STUDENT)
-@limiter.limit("20 per minute")
-def initiate_upi():
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
-
-    order_id = payload.get("order_id")
-    if isinstance(order_id, bool) or not isinstance(order_id, int) or order_id < 1:
-        return error_response("INVALID_ORDER_ID", "order_id must be a positive whole number.", 400)
-
-    try:
-        data = initiate_upi_order(order_id, current_user.id)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("UPI payment initiated", data)
-
-
-@payments_bp.route("/<int:order_id>/upi-qr.svg", methods=["GET"])
-@login_required
-@roles_required(UserRole.STUDENT)
-def order_upi_qr_svg(order_id):
-    try:
-        svg_content = get_order_upi_qr_svg(order_id, current_user.id)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return Response(svg_content, mimetype="image/svg+xml")
-
-
-@payments_bp.route("/upi/submit-claim", methods=["POST"])
-@login_required
-@roles_required(UserRole.STUDENT)
-@limiter.limit("20 per minute")
-def submit_claim():
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
-
-    order_id = payload.get("order_id")
-    if isinstance(order_id, bool) or not isinstance(order_id, int) or order_id < 1:
-        return error_response("INVALID_ORDER_ID", "order_id must be a positive whole number.", 400)
-
-    utr_number = payload.get("utr_number")
-    try:
-        order = submit_upi_claim(order_id, current_user.id, utr_number=utr_number)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("Payment claim submitted. Awaiting staff confirmation.", {
-        "order_id": order.id,
-        "order_number": order.order_number,
-        "order_status": order.order_status,
-        "payment_status": order.payment_status,
-        "utr_number": order.utr_number,
-    })
-
-
-@payments_bp.route("/sandbox/complete", methods=["POST"])
-@login_required
-@roles_required(UserRole.STUDENT)
-@limiter.limit("30 per minute")
-def complete_sandbox():
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
-
-    order_id = payload.get("order_id")
-    if isinstance(order_id, bool) or not isinstance(order_id, int) or order_id < 1:
-        return error_response("INVALID_ORDER_ID", "order_id must be a positive whole number.", 400)
-
-    try:
-        order, refund_required = complete_sandbox_payment(order_id, current_user.id)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("Sandbox payment completed", {
-        "order_id": order.id,
-        "order_number": order.order_number,
-        "order_status": order.order_status,
-        "payment_status": order.payment_status,
-        "refund_required": refund_required,
-    })
-
-
-@payments_bp.route("/webhook/phonepe", methods=["POST"])
-@csrf.exempt
-def phonepe_webhook():
-    raw_body = request.get_data(cache=False)
-    x_verify = request.headers.get("X-VERIFY", "").strip()
-    if not x_verify:
-        return error_response("MISSING_SIGNATURE", "X-VERIFY header is required.", 400)
-
-    try:
-        result = process_phonepe_webhook(raw_body, x_verify)
-    except OrderError as exc:
-        return _order_error(exc)
-    except Exception:
-        current_app.logger.exception("PhonePe webhook processing failed")
-        return error_response("WEBHOOK_PROCESSING_FAILED", "Could not process PhonePe callback.", 500)
-
-    return success_response("PhonePe callback processed", result)
