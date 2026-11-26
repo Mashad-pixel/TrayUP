@@ -5,7 +5,7 @@
     event.preventDefault();
     const email = document.getElementById("email").value.trim();
     const password = document.getElementById("password").value;
-    if (!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(email) || !password) {
+    if (!trayValidation.email(email) || !password) {
       trayNotify("Enter a valid email and password."); return;
     }
     submit.disabled = true;
