@@ -1,3 +1,4 @@
+from tests.session_helpers import issue_test_session
 import pytest
 
 from app.models.order import Order
@@ -173,6 +174,7 @@ def test_non_student_cannot_create_order(app, menu):
     with staff_client.session_transaction() as session:
         session["_user_id"] = str(staff.id)
         session["_fresh"] = True
+        session["sid"] = issue_test_session(staff)
 
     response = post_order(staff_client, [{"menu_item_id": menu["samosa"].id, "quantity": 1}])
 

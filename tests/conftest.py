@@ -1,3 +1,4 @@
+from tests.session_helpers import issue_test_session
 import pytest
 from flask import g, has_app_context
 from flask.testing import FlaskClient
@@ -82,6 +83,7 @@ def client(app, student):
     with test_client.session_transaction() as sess:
         sess["_user_id"] = str(student.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(student)
     return test_client
 
 
@@ -96,4 +98,5 @@ def student_client(app, student):
     with test_client.session_transaction() as sess:
         sess["_user_id"] = str(student.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(student)
     return test_client

@@ -1,3 +1,4 @@
+from tests.session_helpers import issue_test_session
 import pytest
 
 from app.extensions import db
@@ -14,6 +15,7 @@ def _client_for_role(app, role, email):
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
+        session["sid"] = issue_test_session(user)
     return client
 
 

@@ -1,3 +1,4 @@
+from tests.session_helpers import issue_test_session
 from app.extensions import db
 from app.models.user import User
 
@@ -6,6 +7,7 @@ def _login_as(client, user):
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
+        session["sid"] = issue_test_session(user)
 
 
 def test_security_headers_are_present(client):
