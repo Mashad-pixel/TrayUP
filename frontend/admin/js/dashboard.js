@@ -1,51 +1,131 @@
+// Administrator overview. Every figure comes from the reporting and order APIs for canteen-local days.
 (function () {
-  const nav = [["Overview","dashboard.html"],["Menu","menu.html"],["Categories","categories.html"],["Orders","orders.html"],["Staff","staff.html"],["Reports","reports.html"],["Refunds","refunds.html"],["Settings","settings.html"]];
-  const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  document.getElementById("admin-nav").innerHTML = nav.map(([name,file]) =>
-    '<a class="' + (file==="dashboard.html"?"active":"") + '" href="./' + file + '">' + esc(name) + "</a>"
-  ).join("");
-  function renderOrders(orders) {
-    const body=document.getElementById("admin-orders");
-    body.innerHTML=orders.length?orders.slice(0,8).map(o =>
-      "<tr><td>"+esc(o.order_number||o.id)+"</td><td>"+esc(o.student_name||"Guest")+
-      "</td><td>₹"+Number(o.total_amount||o.amount||0).toLocaleString("en-IN")+
-      '</td><td><span class="status">'+esc(o.status||"—")+"</span></td><td>"+esc(o.payment_status||"—")+"</td></tr>"
-    ).join(""):'<tr><td colspan="5">No orders available</td></tr>';
+  "use strict";
+  const P = window.adminPanel;
+  const el = P.el;
+
+  function summaryStats(summary, accentRevenue) {
+    return [
+      P.stat("Orders", String(summary.total_orders), summary.cancelled_orders + " cancelled"),
+      P.stat("Paid", String(summary.paid_orders)),
+      P.stat("Gross revenue", P.money(summary.gross_revenue_paise), "Before refunds"),
+      P.stat("Net revenue", P.money(summary.net_revenue_paise), "After refunds", accentRevenue ? "accent" : null),
+      P.stat("Average order", P.money(summary.average_order_value_paise), "Paid orders"),
+      P.stat("Collected", summary.completion_rate_percent + "%", summary.average_preparation_minutes != null ? "Avg prep " + summary.average_preparation_minutes + " min" : "Share of paid orders")
+    ];
   }
-  function renderDemo() {
-    const demo=[["Total orders","148"],["Today's orders","24"],["Today's revenue","₹18,450"],["Successful payments","23"]];
-    document.getElementById("admin-stats").innerHTML=demo.map(([label,value])=>
-      '<div class="admin-card"><span>'+label+'</span><div class="value">'+value+"</div></div>"
-    ).join("")+'<div class="admin-card" style="grid-column:1/-1"><span class="status warning">Read-only demo data</span></div>';
-    renderOrders([{order_number:"TUP-4825",student_name:"Aarav Shah",total_amount:310,status:"Preparing",payment_status:"Captured"},
-      {order_number:"TUP-4821",student_name:"Meera Iyer",total_amount:225,status:"Ready",payment_status:"Captured"}]);
+
+  function recentTable(orders) {
+    return P.table(
+      [{ label: "Order" }, { label: "Customer" }, { label: "Total", numeric: true }, { label: "Status" }, { label: "Payment" }, { label: "Placed" }],
+      orders.map((order) => [
+        el("span", { class: "cell-strong", text: order.order_number }),
+        order.student ? order.student.name : (order.customer_name || "Guest"),
+        el("span", { text: P.money(order.total_paise) }),
+        P.orderStatusBadge(order.order_status),
+        P.paymentStatusBadge(order.payment_status),
+        el("span", { class: "cell-muted", text: P.formatDateTime(order.created_at) })
+      ]),
+      "No orders yet."
+    );
   }
-  async function load() {
-    if (new URLSearchParams(location.search).get("demo")==="1") return renderDemo();
-    try {
-      const response=await trayApi.get("/admin/orders");
-      const orders=response?.data?.orders||[];
-      const total=orders.reduce((sum,o)=>sum+Number(o.total_amount||o.amount||0),0);
-      const stats=[["Orders",orders.length],["Total value","₹"+total.toLocaleString("en-IN")],
-        ["Paid",orders.filter(o=>o.payment_status==="captured").length],
-        ["Pending",orders.filter(o=>o.status==="received").length]];
-      document.getElementById("admin-stats").innerHTML=stats.map(([label,value])=>
-        '<div class="admin-card"><span>'+esc(label)+'</span><div class="value">'+esc(value)+"</div></div>"
-      ).join("");
-      renderOrders(orders);
-    } catch(error) {
-      const message=error.status===401?"Please sign in to view administrator data.":
-        error.status===403?"This account does not have administrator access.":"Unable to load administrator data. Please retry.";
-      document.getElementById("admin-stats").textContent=message;
-      document.getElementById("admin-orders").textContent=message;
-      if(error.status===401||error.status===403){
-        document.getElementById("admin-stats").innerHTML='<div class="admin-card"><span>'+esc(message)+
-          '</span><div class="value" style="font-size:18px"><a href="./login.html">Sign in</a></div></div>';
-      }
+
+  P.start({
+    page: "dashboard",
+    title: "Overview",
+    run: async ({ content }) => {
+      const today = P.canteenToday();
+      const monthStart = P.addDays(today, -29);
+      const range = "from=" + monthStart + "&to=" + today;
+      const dayRange = "from=" + today + "&to=" + today;
+
+      content.replaceChildren(
+        P.pageHead("Overview", "Today and the last 30 canteen days, from live reports.", [
+          el("a", { class: "btn btn-ghost", href: "orders.html", text: "All orders" }),
+          el("a", { class: "btn btn-primary", href: "reports.html", text: "Detailed reports" })
+        ]),
+        P.loading("Loading figures…")
+      );
+
+      const results = await Promise.allSettled([
+        trayApi.get("/admin/reports/overview?" + dayRange),
+        trayApi.get("/admin/reports/overview?" + range),
+        trayApi.get("/admin/reports/sales?" + range),
+        trayApi.get("/admin/reports/popular-items?" + range + "&limit=6"),
+        trayApi.get("/admin/orders?per_page=8"),
+        trayApi.get("/canteen/status")
+      ]);
+      const [todayRes, monthRes, salesRes, popularRes, ordersRes, statusRes] = results.map((r) => (r.status === "fulfilled" ? r.value : null));
+      const errorOf = (r) => (r.status === "rejected" ? r.reason : null);
+
+      const status = statusRes ? P.unwrap(statusRes) : null;
+      const chip = status
+        ? el("span", { class: "badge badge-" + (status.is_accepting_orders ? "success" : "danger"), text: status.is_accepting_orders ? "Accepting orders" : "Orders paused" })
+        : null;
+
+      const sections = [];
+
+      sections.push(P.card({
+        title: "Today (" + P.formatDay(today) + ")",
+        body: todayRes
+          ? el("div", { class: "grid grid-stats" }, summaryStats(P.unwrap(todayRes), false))
+          : P.errorNotice(errorOf(results[0]))
+      }));
+
+      sections.push(P.card({
+        title: "Last 30 days",
+        subtitle: P.formatDay(monthStart) + " to " + P.formatDay(today),
+        body: monthRes
+          ? el("div", { class: "grid grid-stats" }, summaryStats(P.unwrap(monthRes), true))
+          : P.errorNotice(errorOf(results[1]))
+      }));
+
+      const salesDays = salesRes ? (P.unwrap(salesRes).days || []) : null;
+      const salesCard = P.card({
+        title: "Revenue by day",
+        subtitle: "Gross paid revenue per canteen day",
+        body: salesDays
+          ? (salesDays.length
+              ? P.barChart(salesDays, {
+                  label: "Revenue by day",
+                  value: (d) => d.revenue_paise,
+                  caption: (d) => d.date.slice(8),
+                  tooltip: (d) => P.formatDay(d.date) + ": " + P.money(d.revenue_paise) + " from " + d.orders + " order(s)"
+                })
+              : P.empty("No sales in this period."))
+          : P.errorNotice(errorOf(results[2]))
+      });
+
+      const popular = popularRes ? (P.unwrap(popularRes).items || []) : null;
+      const popularCard = P.card({
+        title: "Top items",
+        subtitle: "Most units sold in the last 30 days",
+        body: popular
+          ? P.rankedList(popular, {
+              label: (i) => i.item_name,
+              value: (i) => i.quantity,
+              format: (i) => i.quantity + " sold · " + P.money(i.revenue_paise),
+              empty: "No items sold in this period."
+            })
+          : P.errorNotice(errorOf(results[3]))
+      });
+      sections.push(el("div", { class: "grid grid-2" }, [salesCard, popularCard]));
+
+      const orders = ordersRes ? (P.unwrap(ordersRes).orders || []) : null;
+      sections.push(P.card({
+        title: "Recent orders",
+        actions: [el("a", { class: "btn btn-ghost btn-small", href: "orders.html", text: "View all" })],
+        body: orders ? recentTable(orders) : P.errorNotice(errorOf(results[4]))
+      }));
+
+      content.replaceChildren(
+        P.pageHead("Overview", "Today and the last 30 canteen days, from live reports.", [
+          chip,
+          el("a", { class: "btn btn-ghost", href: "orders.html", text: "All orders" }),
+          el("a", { class: "btn btn-primary", href: "reports.html", text: "Detailed reports" })
+        ]),
+        el("div", { class: "stack" }, sections)
+      );
     }
-  }
-  document.getElementById("logout").addEventListener("click",async()=>{
-    try{await trayAuth.logout();}catch(_){} location.href="./login.html";
   });
-  load();
 })();

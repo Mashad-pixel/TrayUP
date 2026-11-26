@@ -408,11 +408,9 @@ body.home-page {
 }
 .home-page .search-sticker svg { width: 24px; height: 24px; }
 .home-page .search-sticker-fork { top: -28px; left: 20%; transform: rotate(-12deg); }
-.home-page .search-sticker-spoon { top: -28px; left: 53%; transform: rotate(18deg); }
+.home-page .search-sticker-spoon { top: -28px; right: 10%; transform: rotate(18deg); }
 .home-page .search-sticker-burger { bottom: -28px; left: 13%; transform: rotate(-8deg); }
-.home-page .search-sticker-chef { bottom: -28px; left: 64%; transform: rotate(8deg); }
-.home-page .search-sticker-taco { top: -28px; right: 10%; transform: rotate(10deg); }
-.home-page .search-sticker-drink { bottom: -28px; right: 8%; transform: rotate(-8deg); }
+.home-page .search-sticker-chef { bottom: -28px; right: 8%; transform: rotate(8deg); }
 .home-page .search:has(.search-suggestions:not([hidden])) .search-sticker { visibility: hidden; }
 .home-page .search-suggestions {
   position: absolute;

@@ -21,7 +21,9 @@
   let heroPaused = reducedMotion.matches;
   let heroTransitioning = false;
   let heroDirection = 1;
-  let catalog = window.trayDemoData.products;
+  let catalog = [];
+  let popularityByPeriod = { day: new Map(), week: new Map(), month: new Map() };
+  let loaded = false;
   const searchParams = new URLSearchParams(window.location.search);
   const requestedCategory = searchParams.get("category");
   if (categories.includes(requestedCategory)) activeCategory = requestedCategory;
@@ -73,18 +75,7 @@
   }
 
   function getPopularCounts(period) {
-    const now = new Date();
-    const start = new Date(now);
-    if (period === "day") start.setHours(0, 0, 0, 0);
-    else start.setDate(now.getDate() - (period === "week" ? 7 : 30));
-
-    const counts = new Map();
-    window.trayDemoData.getOrderActivity().forEach((sale) => {
-      const orderedAt = new Date(sale.orderedAt);
-      if (Number.isNaN(orderedAt.getTime()) || orderedAt < start || orderedAt > now) return;
-      counts.set(sale.productId, (counts.get(sale.productId) || 0) + sale.quantity);
-    });
-    return counts;
+    return popularityByPeriod[period] || new Map();
   }
 
   function escapeHtml(value) {
@@ -95,6 +86,23 @@
       "\"": "&quot;",
       "'": "&#39;"
     })[character]);
+  }
+
+  function isEgg(item) {
+    return /\begg\b/i.test(`${item.name} ${item.description}`);
+  }
+
+  // Diet is shown only when the canteen has recorded it. Unknown is not treated as vegetarian.
+  function dietClass(item) {
+    if (isEgg(item)) return "is-egg";
+    if (!item.hasDiet) return "is-unknown";
+    return item.isVeg ? "is-veg" : "is-non-veg";
+  }
+
+  function dietTitle(item) {
+    if (isEgg(item)) return "Contains egg";
+    if (!item.hasDiet) return "Diet not recorded";
+    return item.isVeg ? "Vegetarian" : "Non-vegetarian";
   }
 
   function matchesMood(item, mood) {
@@ -151,7 +159,7 @@
     heroProducts = catalog
       .filter((item) => item.isPopular && item.isAvailable)
       .map((item) => ({ item, count: counts.get(item.id) || 0 }))
-      .sort((a, b) => b.count - a.count || b.item.rating - a.item.rating)
+      .sort((a, b) => b.count - a.count || a.item.name.localeCompare(b.item.name))
       .map(({ item }) => item);
 
     if (!heroProducts.length) {
@@ -270,6 +278,7 @@
   });
 
   function renderCatalog() {
+    if (!loaded) return;
     const query = document.querySelector(".search input")?.value.trim() || "";
     const normalizedQuery = normalizeSearch(query);
     const availability = document.getElementById("availability-filter")?.value || "all";
@@ -288,9 +297,8 @@
         (availability !== "available" || item.isAvailable) &&
         (diet === "all" ||
           (diet === "veg" && item.isVeg) ||
-          (diet === "nonveg" && !item.isVeg && item.dietType !== "egg") ||
-          (diet === "egg" && (item.dietType === "egg" ||
-            /\begg\b/i.test(`${item.name} ${item.description}`))))
+          (diet === "nonveg" && item.hasDiet && !item.isVeg && !isEgg(item)) ||
+          (diet === "egg" && isEgg(item)))
       )
       .sort((a, b) => isPopularView ? b.sales - a.sales || b.score - a.score : b.score - a.score)
       .map(({ item, sales }, index) => ({ ...item, periodOrders: sales, popularityRank: isPopularView ? index + 1 : 0 }));
@@ -305,7 +313,7 @@
         isPopularView ? "No orders recorded for this period yet" : "No dishes found";
       const copy = document.createElement("p");
       copy.textContent = normalizedQuery ? `No menu items matched "${query}". Try another dish or category.` :
-        isPopularView ? "Popular dishes will appear here as orders are recorded." : "Try a different category or search.";
+        isPopularView ? "Dishes appear here once they are ordered in this period. Choose All to browse the full menu." : "Try a different category or search.";
       empty.append(title, copy);
       grid.appendChild(empty);
       const heading = document.querySelector(".menu-heading h2");
@@ -320,7 +328,7 @@
     grid.innerHTML = visible.map((item) => `
       <article class="food-card" data-id="${escapeHtml(item.id)}" tabindex="0" role="link" aria-label="View ${escapeHtml(item.name)} details">
         <div class="food-card-image-wrap">
-          <img class="food-card-image" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22600%22 height=%22450%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%232d322f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23f7f4eb%22%3E${encodeURIComponent(item.name)}%3C/text%3E%3C/svg%3E'">
+          <img class="food-card-image" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" data-fallback-name="${escapeHtml(item.name)}">
           ${item.isPopular ? '<span class="food-card-ribbon">Campus pick</span>' : ""}
         </div>
         <div class="food-card-body">
@@ -329,7 +337,7 @@
           <p class="food-card-description">${escapeHtml(item.description || "")}</p>
           <div class="food-card-status-row">
             <span class="status ${item.isAvailable ? "" : "danger"}">${item.isAvailable ? "Available" : "Sold out"}</span>
-            <span class="food-card-diet ${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "is-egg" : item.isVeg ? "is-veg" : "is-non-veg"}" title="${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "Contains egg" : item.isVeg ? "Vegetarian" : "Non-vegetarian"}">●</span>
+            <span class="food-card-diet ${dietClass(item)}" title="${dietTitle(item)}">●</span>
           </div>
           ${item.popularityRank ? `<p class="food-card-orders">${item.periodOrders} ordered ${activePeriod === "day" ? "today" : activePeriod === "week" ? "this week" : "this month"}</p>` : ""}
           <div class="food-meta">
@@ -350,7 +358,7 @@
   }
 
   function getCart() {
-    return trayStorage.get("trayup-cart", []);
+    return trayStorage.getCart();
   }
 
   function saveCart(cart) {
@@ -362,15 +370,16 @@
     const cart = getCart();
     const quantity = cart.reduce((sum, item) => sum + item.qty, 0);
     document.getElementById("cart-count").textContent = quantity;
+    document.getElementById("mobile-cart-count").textContent = quantity;
     document.getElementById("cart-total").textContent = rupees(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
     document.getElementById("cart-items").innerHTML = cart.length ? cart.map((item) => `
       <div class="cart-item">
-        <img src="${item.image}" alt="">
-        <div><strong>${item.name}</strong><span>${rupees(item.price)}</span>
+        <img src="${escapeHtml(item.image)}" alt="">
+        <div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(rupees(item.price))}</span>
           <div class="qty-control">
-            <button type="button" data-qty="-1" data-id="${item.id}" aria-label="Decrease quantity">−</button>
-            <span>${item.qty}</span>
-            <button type="button" data-qty="1" data-id="${item.id}" aria-label="Increase quantity">+</button>
+            <button type="button" data-qty="-1" data-id="${escapeHtml(item.id)}" aria-label="Decrease quantity">−</button>
+            <span>${escapeHtml(item.qty)}</span>
+            <button type="button" data-qty="1" data-id="${escapeHtml(item.id)}" aria-label="Increase quantity">+</button>
           </div>
         </div>
       </div>
@@ -395,6 +404,19 @@
     });
   }
 
+  // Fallback artwork for dishes whose photo fails to load. Image errors don't bubble, so this
+  // listens during the capture phase. Inline onerror handlers are not allowed by the CSP.
+  function fallbackImageSrc(name) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="450"><rect width="100%" height="100%" fill="#2d322f"/><text x="50%" y="50%" text-anchor="middle" fill="#f7f4eb">${escapeHtml(name)}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  }
+  grid.addEventListener("error", (event) => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.dataset.fallbackName || image.dataset.fallbackApplied) return;
+    image.dataset.fallbackApplied = "true";
+    image.src = fallbackImageSrc(image.dataset.fallbackName);
+  }, true);
+
   grid.addEventListener("click", (event) => {
     const addButton = event.target.closest("[data-card-add]");
     const quantityButton = event.target.closest("[data-card-qty]");
@@ -407,7 +429,7 @@
       const item = cart.find((entry) => entry.id === id);
       const change = quantityButton ? Number(quantityButton.dataset.cardQty) : 1;
       if (item) item.qty += change;
-      else if (change > 0) cart.push({ ...product, qty: change });
+      else if (change > 0) cart.push({ id: product.id, name: product.name, price: product.price, image: product.image, qty: change });
       saveCart(cart.filter((entry) => entry.qty > 0));
       if (change > 0 && window.trayNotify) window.trayNotify("Good choice! Added to your tray.");
       return;
@@ -628,8 +650,29 @@
     saveCart(cart.filter((entry) => entry.qty > 0));
   });
 
-  renderCategoryRail();
-  renderHero();
-  renderCatalog();
+  async function loadMenu() {
+    try {
+      const [items, day, week, month] = await Promise.all([
+        trayCatalog.list(),
+        trayCatalog.popularity("day"),
+        trayCatalog.popularity("week"),
+        trayCatalog.popularity("month")
+      ]);
+      catalog = items;
+      popularityByPeriod = { day, week, month };
+      // "Campus pick" marks the five most-ordered dishes this month.
+      const topIds = new Set([...month.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id]) => id));
+      catalog.forEach((item) => { item.isPopular = topIds.has(item.id); });
+      loaded = true;
+      renderCategoryRail();
+      renderHero();
+      renderCatalog();
+    } catch (error) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><h3>We couldn’t load the menu</h3><p>Check your connection and refresh the page.</p></div>';
+    }
+  }
+
   renderCart();
+  grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>Loading the menu…</p></div>';
+  loadMenu();
 })();
