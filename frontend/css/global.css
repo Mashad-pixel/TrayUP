@@ -516,3 +516,7 @@ body.home-page {
   100% { transform: scale(1); }
 }
 .home-page .cart-count-pop { animation: tray-cart-pop 360ms ease; }
+
+@media (max-width: 370px) {
+  body { min-width: 0; }
+}

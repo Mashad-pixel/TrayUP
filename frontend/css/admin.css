@@ -71,12 +71,60 @@
 .login-card .btn { width:100%; margin-top:12px; }
 
 @media (max-width: 900px) {
-  .admin-layout { grid-template-columns: 76px 1fr; }
-  .admin-sidebar { padding-inline: 8px; }
-  .admin-sidebar .brand span:last-child { display:none; }
-  .admin-sidebar a { justify-content:center; font-size:0; }
+  .admin-layout { grid-template-columns: 180px minmax(0, 1fr); }
+  .admin-sidebar { padding-inline: 12px; }
+  .admin-sidebar .brand span:last-child { display:inline; }
+  .admin-sidebar a { justify-content:flex-start; font-size:12px; }
   .admin-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .admin-content { padding:18px; }
   .data-table { min-width:720px; }
   .table-card { overflow-x:auto; }
+}
+
+@media (max-width: 680px) {
+  .admin-layout { grid-template-columns: minmax(0, 1fr); }
+  .admin-sidebar { min-width: 0; padding: 12px; }
+  .admin-sidebar .brand { margin: 0 4px 10px; }
+  .admin-sidebar .brand span:last-child { display: inline; }
+  .admin-sidebar nav {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .admin-sidebar nav::-webkit-scrollbar { display: none; }
+  .admin-sidebar a {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 12px;
+    margin: 0;
+  }
+  .admin-header { height: auto; min-height: 56px; gap: 8px; padding: 10px 14px; flex-wrap: wrap; }
+  .admin-content { padding: 14px; }
+  .admin-title { font-size: clamp(28px, 8vw, 36px); }
+  .admin-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .admin-card { min-width: 0; padding: 14px; }
+  .admin-card .value { font-size: clamp(22px, 6vw, 30px); }
+  .admin-content > div:has(#order-search) {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    margin: 18px 0 !important;
+  }
+  #order-search { grid-column: 1 / -1; width: 100%; min-width: 0; box-sizing: border-box; }
+  #payment-filter,
+  #status-filter { width: 100%; min-width: 0; box-sizing: border-box; }
+  #settings-form { width: 100%; min-width: 0; box-sizing: border-box; }
+  #settings-form > div:has(#open-time) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #settings-form .field { min-width: 0; }
+  #settings-form .field input,
+  #settings-form .field select,
+  #settings-form .field textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+}
+
+@media (max-width: 370px) {
+  body { min-width: 0; }
+  #settings-form > div:has(#open-time) { grid-template-columns: minmax(0, 1fr); }
 }

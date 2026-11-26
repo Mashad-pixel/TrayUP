@@ -11,6 +11,7 @@
   .nav-actions .login-link svg { width: 18px; height: 18px; flex: 0 0 auto; }
   .category-nav { justify-content: flex-start; padding-inline: 20px; gap: 8px; }
   .food-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kitchen-summary { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
   .nav-actions .account-link { display: none; }
   .kitchen-board { grid-template-columns: repeat(2, minmax(220px, 1fr)); overflow-x: auto; }
   .admin-layout { grid-template-columns: 180px 1fr; }
@@ -20,6 +21,10 @@
     gap: 16px;
   }
   .category-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+}
+
+@media (max-width: 1100px) {
+  .nav-actions .login-link svg { width: 18px; height: 18px; flex: 0 0 auto; }
 }
 
 @media (max-width: 680px) {
@@ -80,7 +85,7 @@
   .hero-copy { width: 100%; padding: 28px 24px 72px; }
   .hero-copy h1 { font-size: clamp(40px, 11vw, 54px); }
   .hero-copy p { font-size: 14px; }
-  .food-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+  .food-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px 12px; }
   .food-card h3 { font-size: 17px; min-height: 40px; }
   .food-card-body { padding-top: 10px; }
   .menu-heading h2 { font-size: 34px; }
@@ -139,7 +144,7 @@
   .category-tile strong { left: 12px; bottom: 12px; font-size: 18px; }
   .mood-wrap { grid-template-columns: 1fr; gap: 17px; padding: 22px; }
   .mood-copy h2 { font-size: 34px; }
-  .mood-choices { gap: 7px; }
+  .mood-choices { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 7px; }
   .mood-choice { min-height: 58px; gap: 8px; padding-inline: 10px; font-size: 11px; }
   .mood-choice:last-child { grid-column: 1 / -1; }
   .roulette-wrap { grid-template-columns: 1fr; gap: 18px; padding: 25px 20px; }
@@ -165,8 +170,9 @@
   .home-page .food-card-add,
   .home-page .food-card-quantity { height: 32px; gap: 5px; font-size: 11px; }
   .home-page .food-card-quantity button { width: 25px; height: 25px; }
-  .home-page .menu-filters { justify-content: flex-start; overflow-x: auto; }
-  .home-page .menu-filters select { flex: 0 0 auto; max-width: 48%; }
+  .home-page .menu-filters { justify-content: flex-start; flex-wrap: wrap; }
+  .home-page .menu-filters select { flex: 1 1 130px; min-width: 0; max-width: 100%; }
+  .home-page .menu-filters .btn { flex: 1 1 100%; }
   .home-page .mobile-dock {
     position: fixed;
     z-index: 80;
@@ -200,7 +206,6 @@
 }
 
 @media (max-width: 370px) {
-  body { min-width: 0; }
   .home-page .nav-main { grid-template-columns: 34px minmax(0, 1fr) auto; gap: 7px; }
   .home-page .nav-actions { gap: 4px; }
   .home-page .nav-main > .nav-actions { width: auto; }
