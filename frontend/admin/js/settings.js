@@ -5,12 +5,9 @@
 
   const ui = window.trayUI;
   const root = document.querySelector(".admin-content");
-  if (window.trayMode.isDemo()) {
-    ui.demoOnly(root, "Canteen settings", "Settings are not loaded in demo mode.");
-    return;
-  }
 
   let settings = null;
+  let account = null;
   let formErrors = {};
   let statusErrors = {};
   let notice = null;
@@ -46,13 +43,34 @@
     ]);
   }
 
+  function accountCard() {
+    return ui.el("section", { class: "card", style: "padding:18px;margin-top:18px;max-width:720px" }, [
+      ui.el("h2", { style: "font-size:18px;margin:0 0 8px", text: "Account security" }),
+      ui.el("p", { class: "ui-muted", text: `Signed in as ${account.name} (${account.email})` }),
+      ui.el("form", { id: "email-form", class: "ui-form" }, [
+        ui.el("label", { class: "ui-field" }, ["New email", ui.el("input", { name: "new_email", type: "email", required: true })]),
+        ui.el("label", { class: "ui-field" }, ["Current password", ui.el("input", { name: "current_password", type: "password", required: true, autocomplete: "current-password" })]),
+        ui.el("button", { class: "btn btn-secondary", type: "submit", text: "Change email" })
+      ]),
+      ui.el("form", { id: "password-form", class: "ui-form", style: "margin-top:12px" }, [
+        ui.el("label", { class: "ui-field" }, ["Current password", ui.el("input", { name: "current_password", type: "password", required: true, autocomplete: "current-password" })]),
+        ui.el("label", { class: "ui-field" }, ["New password", ui.el("input", { name: "new_password", type: "password", required: true, autocomplete: "new-password" })]),
+        ui.el("button", { class: "btn btn-secondary", type: "submit", text: "Change password" })
+      ]),
+      ui.el("div", { class: "ui-row-actions", style: "margin-top:12px" }, [
+        ui.el("button", { class: "btn btn-secondary", id: "revoke-sessions", type: "button", text: "Sign out other sessions" })
+      ])
+    ]);
+  }
+
   function render() {
     root.replaceChildren(
       ui.header("Canteen settings"),
       ui.el("p", { class: "ui-muted", style: "margin-top:10px", text: "Opening hours are saved as reference information. Use the ordering switch to control whether students can place orders." }),
       notice,
       detailsForm(),
-      statusCard()
+      statusCard(),
+      account ? accountCard() : null
     );
   }
 
@@ -64,7 +82,10 @@
 
   async function load() {
     try {
-      settings = await trayApi.get("/admin/canteen/settings");
+      [settings, account] = await Promise.all([
+        trayApi.get("/admin/canteen/settings"),
+        trayApi.get("/account").then((response) => response.data)
+      ]);
       render();
     } catch (error) {
       root.replaceChildren(ui.header("Canteen settings"), ui.errorNotice(error));
@@ -110,6 +131,34 @@
     event.preventDefault();
     if (event.target.id === "details-form") saveDetails(event.target);
     else if (event.target.id === "status-form") saveStatus(event.target, event.submitter || event.target.querySelector("button[type=submit]"));
+    else if (event.target.id === "email-form") saveAccountChange(event.target, "/account/email", "Email address changed.");
+    else if (event.target.id === "password-form") saveAccountChange(event.target, "/account/password", "Password changed.");
+  });
+
+  async function saveAccountChange(form, path, message) {
+    const data = Object.fromEntries(new FormData(form));
+    try {
+      await trayApi.post(path, data);
+      form.reset();
+      account = (await trayApi.get("/account")).data;
+      say(message, "ok");
+    } catch (error) {
+      formErrors = ui.fieldErrors(error);
+      if (!Object.keys(formErrors).length) formErrors = { body: ui.describeError(error).text };
+      render();
+    }
+  }
+
+  root.addEventListener("click", async (event) => {
+    if (event.target.id !== "revoke-sessions") return;
+    event.target.disabled = true;
+    try {
+      const response = await trayApi.post("/account/sessions/revoke-others", {});
+      say(`${response.data.revoked} other session(s) signed out.`, "ok");
+    } catch (error) {
+      statusErrors = { body: ui.describeError(error).text };
+      render();
+    }
   });
 
   load();

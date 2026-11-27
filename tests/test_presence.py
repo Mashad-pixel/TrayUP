@@ -22,6 +22,7 @@ from app.services.presence_service import (
 )
 from app.services.time_utils import utcnow
 from presence_helpers import issue_test_presence_session
+from tests.session_helpers import issue_test_session
 
 VERIFY = "/api/presence/verify"
 DISPLAY = "/api/presence/display-code"
@@ -47,6 +48,7 @@ def logged_in(app, user, *, auto_presence=False):
     with client.session_transaction() as sess:
         sess["_user_id"] = str(user.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(user)
     return client
 
 

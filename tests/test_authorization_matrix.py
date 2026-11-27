@@ -62,12 +62,19 @@ MATRIX = [
     ("POST", "/api/auth/login", PUBLIC),
     ("POST", "/api/auth/register", PUBLIC),
     ("POST", "/api/payments/webhook", PUBLIC),  # protected by Razorpay's signature, not by login
+    ("POST", "/api/payments/webhook/phonepe", PUBLIC),  # protected by PhonePe's signature
+    ("GET", "/api/presence/settings", PUBLIC),
     # Any logged-in user
     ("GET", "/api/auth/me", AUTH),
     ("POST", "/api/auth/logout", AUTH),
     ("POST", "/api/auth/mfa/setup", AUTH),
     ("POST", "/api/auth/mfa/confirm", AUTH),
     ("POST", "/api/auth/recovery-codes", AUTH),
+    ("GET", "/api/account", AUTH),
+    ("GET", "/api/account/sessions", AUTH),
+    ("POST", "/api/account/email", AUTH),
+    ("POST", "/api/account/password", AUTH),
+    ("POST", "/api/account/sessions/revoke-others", AUTH),
     # Students only
     ("GET", "/api/orders", STUDENT_ONLY),
     ("POST", "/api/orders", STUDENT_ONLY),
@@ -76,11 +83,22 @@ MATRIX = [
     ("GET", "/api/orders/<int:order_id>/collection-qr", STUDENT_ONLY),
     ("POST", "/api/payments/create-order", STUDENT_ONLY),
     ("POST", "/api/payments/verify", STUDENT_ONLY),
+    ("GET", "/api/payments/methods", STUDENT_ONLY),
+    ("GET", "/api/payments/<int:order_id>/upi-qr.svg", STUDENT_ONLY),
+    ("POST", "/api/payments/upi/initiate", STUDENT_ONLY),
+    ("POST", "/api/payments/upi/submit-claim", STUDENT_ONLY),
+    ("POST", "/api/payments/sandbox/complete", STUDENT_ONLY),
+    ("POST", "/api/presence/verify", STUDENT_ONLY),
     # Kitchen staff and admins
     ("GET", "/api/kitchen/orders", KITCHEN_AND_ADMIN),
     ("PATCH", "/api/kitchen/orders/<int:order_id>/status", KITCHEN_AND_ADMIN),
     ("POST", "/api/kitchen/collection/verify", KITCHEN_AND_ADMIN),
     ("POST", "/api/kitchen/collection/confirm", KITCHEN_AND_ADMIN),
+    ("GET", "/api/kitchen/orders/pending-confirmation", KITCHEN_AND_ADMIN),
+    ("POST", "/api/kitchen/orders/<int:order_id>/confirm-payment", KITCHEN_AND_ADMIN),
+    ("POST", "/api/kitchen/orders/<int:order_id>/reject-payment", KITCHEN_AND_ADMIN),
+    ("GET", "/api/presence/display-code", KITCHEN_AND_ADMIN),
+    ("POST", "/api/presence/revoke", KITCHEN_AND_ADMIN),
     # Admins only
     ("GET", "/api/admin/staff", ADMIN_ONLY),
     ("POST", "/api/admin/staff", ADMIN_ONLY),

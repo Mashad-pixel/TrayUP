@@ -5,10 +5,6 @@
 
   const ui = window.trayUI;
   const root = document.querySelector(".admin-content");
-  if (window.trayMode.isDemo()) {
-    ui.demoOnly(root, "Categories", "Categories are not loaded in demo mode.");
-    return;
-  }
 
   let categories = [];
   let renaming = null;   // id of the row being renamed

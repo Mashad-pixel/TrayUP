@@ -16,6 +16,7 @@ from app.services.errors import OrderError
 from app.services.order_details import CustomerDetails, request_fingerprint
 from app.services.inventory_service import release_reservations, reserve_stock, return_sold_stock
 from app.services.pricing_service import normalize_requested_items, price_order
+from app.services.presence_service import consume_presence_session, load_presence_session_for_order
 from app.services.time_utils import as_utc, utcnow
 from app.services.firebase_service import sync_order_to_firebase
 
@@ -194,7 +195,14 @@ def _sweep_expired_orders_safely():
         current_app.logger.exception("Could not expire unpaid orders before creating a new order.")
 
 
-def create_order(student_id, raw_items, idempotency_key=None, customer=None):
+def create_order(
+    student_id,
+    raw_items,
+    idempotency_key=None,
+    customer=None,
+    presence_session_token=None,
+    require_presence=False,
+):
     """Create a pending_payment order and reserve its stock in one transaction.
 
     Returns (order, raw_tracking_token). raw_tracking_token is None when an existing
@@ -212,6 +220,14 @@ def create_order(student_id, raw_items, idempotency_key=None, customer=None):
         if existing:
             _reuse_existing(existing, requested, fingerprint)
             return existing, None
+
+    presence_session_id = None
+    if require_presence or presence_session_token is not None:
+        presence_session_id = load_presence_session_for_order(
+            presence_session_token,
+            student_id,
+            utcnow(),
+        )
 
     canteen = get_status()
     if not canteen["is_accepting_orders"]:
@@ -259,6 +275,8 @@ def create_order(student_id, raw_items, idempotency_key=None, customer=None):
         db.session.add(order)
         db.session.flush()  # Assigns order.id, which the stock reservations need.
         reserve_stock(order.id, priced.lines)
+        if presence_session_id is not None:
+            consume_presence_session(presence_session_id, student_id, order.id, utcnow())
         db.session.commit()
     except IntegrityError:
         # A parallel request with the same key may have won the race.

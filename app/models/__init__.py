@@ -20,6 +20,7 @@ from app.models.recovery import (
     RecoveryCode,
     RecoveryRequest,
 )
+from app.models.presence import PresenceRedemption, PresenceSession, PresenceToken
 
 __all__ = [
     "User", "UserRole", "UserSession", "CanteenSettings", "MenuItem", "MenuCategory",
@@ -28,4 +29,5 @@ __all__ = [
     "WebhookEvent", "WebhookStatus", "StockReservation", "ReservationStatus",
     "Refund", "RefundStatus", "OtpChallenge", "PasswordResetToken", "RecoveryCode", "RecoveryRequest",
     "PasswordRecoveryChallenge", "AccountRecoveryRequest",
+    "PresenceToken", "PresenceRedemption", "PresenceSession",
 ]

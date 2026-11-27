@@ -5,6 +5,7 @@ from app.models.order import utcnow
 class PaymentRecordStatus:
     CREATED = "created"                        # Razorpay order exists, waiting for payment
     PAID = "paid"                              # Payment captured and confirmed for the order
+    FAILED = "failed"
     REFUND_REQUIRED = "refund_required"        # Money captured, but the order can't be fulfilled
     PARTIALLY_REFUNDED = "partially_refunded"  # Some of the money has been returned
     REFUNDED = "refunded"                      # All of the money has been returned
@@ -33,6 +34,7 @@ class Payment(db.Model):
 
     # Razorpay payment ID (pay_...). Set once a payment is captured.
     provider_payment_id = db.Column(db.String(64), unique=True, nullable=True)
+    utr_number = db.Column(db.String(32), nullable=True, unique=True, index=True)
 
     amount_paise = db.Column(db.Integer, nullable=False)
     currency = db.Column(db.String(3), nullable=False, default="INR")

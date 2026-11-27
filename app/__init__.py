@@ -19,6 +19,7 @@ from app.routes.frontend import frontend_bp
 from app.routes.kitchen import kitchen_bp
 from app.routes.orders import orders_bp
 from app.routes.payments import payments_bp
+from app.routes.presence import presence_bp
 from app.routes.public import public_bp
 from app.routes.recovery import recovery_bp
 from app.routes.reports import reports_bp
@@ -167,6 +168,7 @@ def create_app(config_name="production"):
     app.register_blueprint(admin_orders_bp)
     app.register_blueprint(kitchen_bp)
     app.register_blueprint(payments_bp)
+    app.register_blueprint(presence_bp)
     app.register_blueprint(admin_refunds_bp)
     app.register_blueprint(admin_staff_bp)
     app.register_blueprint(admin_management_bp)

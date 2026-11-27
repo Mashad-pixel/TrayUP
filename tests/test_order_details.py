@@ -1,11 +1,14 @@
 """Checkout details on orders, and the idempotency fingerprint that stops a reused key from returning the wrong order."""
 from app.extensions import db
 from app.models.order import Order
+from tests.presence_helpers import presence_headers_for
 
 
 def post_order(client, items, key="key-1", **details):
     body = {"items": items, **details}
-    headers = {"Idempotency-Key": key} if key else {}
+    headers = presence_headers_for(client)
+    if key:
+        headers["Idempotency-Key"] = key
     return client.post("/api/orders", json=body, headers=headers)
 
 

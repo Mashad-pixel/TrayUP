@@ -277,7 +277,7 @@ def test_categories_list_counts_items_and_are_admin_only(app, owner_client, kitc
     db.session.commit()
     rows = owner_client.get("/api/admin/categories").get_json()["categories"]
     assert rows == [{
-        "id": rows[0]["id"], "name": "Snacks", "item_count": 1,
+        "id": rows[0]["id"], "name": "Snacks", "sort_order": 0, "item_count": 1,
         "created_at": rows[0]["created_at"], "updated_at": rows[0]["updated_at"],
     }]
     assert kitchen_client.get("/api/admin/categories").status_code == 403
@@ -288,7 +288,7 @@ def test_category_names_are_unique_ignoring_case(owner_client):
     assert owner_client.post("/api/admin/categories", json={"name": "Beverages"}).status_code == 201
     duplicate = owner_client.post("/api/admin/categories", json={"name": "  beverages "})
     assert duplicate.status_code == 409
-    assert duplicate.get_json()["error"]["code"] == "CATEGORY_EXISTS"
+    assert duplicate.get_json()["error"]["code"] == "CATEGORY_NAME_TAKEN"
 
 
 def test_blank_category_name_is_a_validation_error_with_details(owner_client):
@@ -333,6 +333,8 @@ def test_unknown_category_returns_not_found(owner_client):
 
 
 def test_menu_items_must_use_an_existing_category(owner_client):
+    db.session.add(MenuCategory(name="Snacks"))
+    db.session.commit()
     response = owner_client.post("/api/admin/menu", json={
         "name": "Mystery Roll", "category": "Nowhere", "price_paise": 4500,
     })
@@ -355,39 +357,42 @@ def test_menu_item_category_is_matched_case_insensitively_and_stored_in_canonica
 def test_canteen_settings_have_defaults_before_anything_is_saved(owner_client):
     data = owner_client.get("/api/admin/canteen/settings").get_json()
     assert data["canteen_name"] == "TrayUP Canteen"
-    assert data["opens_at"] is None and data["closes_at"] is None
+    assert data["opens_at"] == "08:00" and data["closes_at"] == "18:00"
     assert data["is_accepting_orders"] is True
 
 
-def test_canteen_details_are_saved_and_shown_to_students(owner_client, anon_client):
+def test_canteen_details_are_saved_while_public_status_stays_minimal(owner_client, anon_client):
     response = owner_client.patch("/api/admin/canteen/settings", json={
         "canteen_name": "  Main   Block  Canteen ", "opens_at": "08:30", "closes_at": "18:00",
     })
     assert response.status_code == 200
     assert response.get_json()["canteen_name"] == "Main Block Canteen"
 
-    stored = CanteenSettings.query.get(1)
-    assert (stored.canteen_name, stored.opens_at, stored.closes_at) == ("Main Block Canteen", "08:30", "18:00")
+    stored = db.session.get(CanteenSettings, 1)
+    assert (
+        stored.canteen_name,
+        stored.opens_at.isoformat(timespec="minutes"),
+        stored.closes_at.isoformat(timespec="minutes"),
+    ) == (
+        "Main Block Canteen", "08:30", "18:00",
+    )
 
     public = anon_client.get("/api/canteen/status").get_json()
-    assert public["canteen_name"] == "Main Block Canteen"
-    assert public["opens_at"] == "08:30"
-    assert public["is_accepting_orders"] is True
+    assert public == {"is_accepting_orders": True, "message": None}
 
 
-def test_hours_can_be_cleared_together(owner_client):
+def test_hours_cannot_be_cleared(owner_client):
     owner_client.patch("/api/admin/canteen/settings", json={"opens_at": "08:00", "closes_at": "18:00"})
     response = owner_client.patch("/api/admin/canteen/settings", json={"opens_at": None, "closes_at": None})
-    assert response.status_code == 200
-    assert response.get_json()["opens_at"] is None
+    assert response.status_code == 400
+    assert "opens_at" in response.get_json()["details"]
 
 
 @pytest.mark.parametrize("payload, field", [
-    ({"opens_at": "08:00"}, "hours"),
-    ({"opens_at": "18:00", "closes_at": "08:00"}, "hours"),
+    ({"opens_at": "18:00", "closes_at": "08:00"}, "closes_at"),
     ({"opens_at": "25:00", "closes_at": "26:00"}, "opens_at"),
     ({"canteen_name": "   "}, "canteen_name"),
-    ({"canteen_name": "x" * 81}, "canteen_name"),
+    ({"canteen_name": "x" * 121}, "canteen_name"),
     ({"unknown": 1}, "unknown_fields"),
     ({}, "body"),
 ])

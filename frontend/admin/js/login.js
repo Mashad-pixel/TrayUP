@@ -56,7 +56,7 @@
         goToDashboard(data.role);
       }
     } catch (error) {
-      // Failed authentication must never create a local demo role.
+      // Failed authentication must never create a local role.
       trayNotify(error.message || "Unable to sign in.");
     } finally { submit.disabled = false; }
   });

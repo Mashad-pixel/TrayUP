@@ -5,10 +5,12 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.user import User
 from app.extensions import db
+from tests.presence_helpers import presence_headers_for
 
 
 def post_order(client, items, key=None, **extra):
     headers = {}
+    headers.update(presence_headers_for(client))
     if key is not None:
         headers["Idempotency-Key"] = key
     body = {"items": items, **extra}

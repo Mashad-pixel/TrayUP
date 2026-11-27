@@ -2,6 +2,7 @@
 import pytest
 
 from tests.session_helpers import issue_test_session
+from tests.presence_helpers import presence_headers_for
 from app.extensions import db
 from app.models.menu import MenuItem
 from app.models.menu_category import MenuCategory
@@ -48,7 +49,10 @@ def _order_for(client, menu_key, menu, quantity=1):
     return client.post(
         "/api/orders",
         json={"items": [{"menu_item_id": menu[menu_key].id, "quantity": quantity}]},
-        headers={"Idempotency-Key": f"key-{menu_key}-{quantity}"},
+        headers={
+            "Idempotency-Key": f"key-{menu_key}-{quantity}",
+            **presence_headers_for(client),
+        },
     )
 
 

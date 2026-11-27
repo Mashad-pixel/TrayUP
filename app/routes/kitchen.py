@@ -13,6 +13,8 @@ from app.services.kitchen_service import (
     parse_queue_limit,
 )
 from app.services.order_serializer import serialize_order
+from app.models.order import Order, PaymentStatus
+from app.services.upi_payment_service import confirm_upi_payment, reject_upi_payment
 
 kitchen_bp = Blueprint("kitchen", __name__, url_prefix="/api/kitchen")
 
@@ -109,3 +111,54 @@ def confirm_collection_code():
         return _order_error(exc)
 
     return success_response("Order collected", serialize_order(order))
+
+
+@kitchen_bp.get("/orders/pending-confirmation")
+@login_required
+@roles_required(*KITCHEN_ACCESS)
+def pending_payment_confirmations():
+    orders = (
+        Order.query
+        .filter_by(payment_status=PaymentStatus.AWAITING_CONFIRMATION)
+        .order_by(Order.created_at, Order.id)
+        .all()
+    )
+    return success_response("Pending payment confirmations", {
+        "orders": [serialize_order(order) for order in orders],
+    })
+
+
+@kitchen_bp.post("/orders/<int:order_id>/confirm-payment")
+@login_required
+@roles_required(*KITCHEN_ACCESS)
+def confirm_payment(order_id):
+    payload = request.get_json(silent=True)
+    if payload is not None and not isinstance(payload, dict):
+        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
+    try:
+        order = confirm_upi_payment(
+            order_id,
+            current_user.id,
+            payload.get("notes", "") if payload else "",
+        )
+    except OrderError as exc:
+        return _order_error(exc)
+    return success_response("Payment confirmed", {"order": serialize_order(order)})
+
+
+@kitchen_bp.post("/orders/<int:order_id>/reject-payment")
+@login_required
+@roles_required(*KITCHEN_ACCESS)
+def reject_payment(order_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
+    try:
+        order = reject_upi_payment(
+            order_id,
+            current_user.id,
+            payload.get("reason", ""),
+        )
+    except OrderError as exc:
+        return _order_error(exc)
+    return success_response("Payment rejected", serialize_order(order))

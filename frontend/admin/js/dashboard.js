@@ -7,10 +7,6 @@
   const statsBox = document.getElementById("admin-stats");
   const rows = document.getElementById("admin-orders");
 
-  const nav = [["Overview", "dashboard.html"], ["Menu", "menu.html"], ["Categories", "categories.html"], ["Orders", "orders.html"], ["Staff", "staff.html"], ["Reports", "reports.html"], ["Refunds", "refunds.html"], ["Settings", "settings.html"]];
-  document.getElementById("admin-nav").innerHTML = nav.map(([name, file]) =>
-    `<a class="${file === "dashboard.html" ? "active" : ""}" href="./${file}">${name}</a>`).join("");
-
   function stat(label, value) {
     return ui.el("div", { class: "admin-card" }, [ui.el("span", { text: label }), ui.el("div", { class: "value", text: value })]);
   }
@@ -74,17 +70,6 @@
       showError(error);
     }
   }
-
-  document.getElementById("logout").addEventListener("click", async () => {
-    if (window.trayMode?.isDemo?.()) { window.trayMode.exitDemo(); window.location.href = "./login.html"; return; }
-    try {
-      await trayAuth.logout();
-    } catch (_) {
-      trayNotify("Could not sign out. Check the connection and try again.");
-      return;
-    }
-    window.location.href = "./login.html";
-  });
 
   load();
 })();

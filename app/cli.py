@@ -6,6 +6,7 @@ from flask.cli import with_appcontext
 
 from app.extensions import db
 from app.models.menu import MenuItem
+from app.models.menu_category import MenuCategory
 from app.models.user import User, UserRole
 from app.services.order_service import (
     DEFAULT_EXPIRY_BATCH_SIZE,
@@ -14,7 +15,9 @@ from app.services.order_service import (
     expiry_status,
 )
 from app.services.menu_service import MenuValidationError, create_menu_item, validate_menu_payload
+from app.services.category_service import create_category
 from app.services.session_service import prune_sessions, revoke_user_sessions
+from app.services.time_utils import utcnow
 from app.security.account_rules import is_valid_email, is_valid_name, normalize_email, password_problem
 
 
@@ -163,9 +166,77 @@ def seed_menu_command():
                 f"Seed entry {index} ({entry.get('name')!r}) is invalid: {exc.errors}"
             )
 
+    categories = {}
+    for entry in entries:
+        category_name = entry["category"]
+        if category_name not in categories:
+            category = MenuCategory.query.filter_by(name=category_name).first()
+            if category is None:
+                category = create_category({"name": category_name})
+            categories[category_name] = category
     for entry in entries:
         create_menu_item(entry)
     click.echo(f"Loaded {len(entries)} menu items.")
+
+
+@click.command("setup-admin")
+@click.option("--email", required=True, help="Administrator sign-in email.")
+@click.option("--name", default="Administrator", show_default=True, help="Administrator name.")
+@with_appcontext
+def setup_admin_command(email, name):
+    """Create the first administrator account interactively."""
+    email = normalize_email(email)
+    name = " ".join(name.split())
+    if not is_valid_email(email):
+        raise click.ClickException("Enter a valid email address.")
+    if not is_valid_name(name):
+        raise click.ClickException("Enter a name with 1 to 100 characters.")
+    if User.query.filter_by(role=UserRole.ADMIN).first() is not None:
+        raise click.ClickException("An administrator already exists.")
+    if User.query.filter_by(email=email).first() is not None:
+        raise click.ClickException("A user with that email already exists.")
+
+    password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+    problem = password_problem(password)
+    if problem:
+        raise click.ClickException(problem)
+    user = User(name=name, email=email, role=UserRole.ADMIN, is_active=True)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    click.echo(f"Created administrator {user.email}.")
+
+
+@click.command("reset-admin-credentials")
+@click.option("--current-email", required=True, help="Current administrator email.")
+@click.option("--new-email", help="New sign-in email. Defaults to the current email.")
+@with_appcontext
+def reset_admin_credentials_command(current_email, new_email):
+    """Change an administrator's email/password and revoke existing sessions."""
+    user = User.query.filter_by(email=normalize_email(current_email)).first()
+    if user is None:
+        raise click.ClickException("No user has that email address.")
+    if user.role != UserRole.ADMIN:
+        raise click.ClickException("That user is not an administrator.")
+
+    normalized_email = normalize_email(new_email) if new_email else user.email
+    if not is_valid_email(normalized_email):
+        raise click.ClickException("Enter a valid email address.")
+    duplicate = User.query.filter(User.email == normalized_email, User.id != user.id).first()
+    if duplicate is not None:
+        raise click.ClickException("A user with that email already exists.")
+
+    password = click.prompt("New password", hide_input=True, confirmation_prompt=True)
+    problem = password_problem(password)
+    if problem:
+        raise click.ClickException(problem)
+
+    user.email = normalized_email
+    user.set_password(password)
+    user.password_changed_at = utcnow()
+    db.session.commit()
+    revoked = revoke_user_sessions(user.id)
+    click.echo(f"Updated administrator credentials. Revoked {revoked} session(s).")
 
 
 def register_cli(app):
@@ -175,3 +246,5 @@ def register_cli(app):
     app.cli.add_command(reset_mfa_command)
     app.cli.add_command(revoke_sessions_command)
     app.cli.add_command(prune_sessions_command)
+    app.cli.add_command(setup_admin_command)
+    app.cli.add_command(reset_admin_credentials_command)

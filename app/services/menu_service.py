@@ -113,6 +113,8 @@ def validate_menu_payload(data, partial=False):
             exists = MenuCategory.query.filter(func.lower(MenuCategory.name) == cleaned["category"].lower()).first()
             if exists is None:
                 errors["category"] = "Choose an existing menu category."
+            else:
+                cleaned["category"] = exists.name
     elif not partial:
         errors["category"] = "This field is required."
 

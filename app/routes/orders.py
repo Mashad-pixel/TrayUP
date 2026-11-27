@@ -40,6 +40,8 @@ def create_order_route():
             raw_items=payload.get("items"),
             idempotency_key=request.headers.get("Idempotency-Key"),
             customer=customer,
+            presence_session_token=request.headers.get("X-Presence-Session"),
+            require_presence=True,
         )
     except OrderError as exc:
         return _order_error(exc)

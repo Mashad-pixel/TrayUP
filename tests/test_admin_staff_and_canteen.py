@@ -3,6 +3,7 @@ import pytest
 
 from app.extensions import db
 from app.models.user import User, UserRole
+from tests.presence_helpers import presence_headers_for
 from tests.session_helpers import issue_test_session
 
 
@@ -160,7 +161,11 @@ def test_closing_the_canteen_stops_orders_and_shows_the_admin_message(app, admin
     public = app.test_client().get("/api/canteen/status").get_json()
     assert public == {"is_accepting_orders": False, "message": "Closed for exams until Monday"}
 
-    order = client.post("/api/orders", json={"items": [{"menu_item_id": menu["samosa"].id, "quantity": 1}]})
+    order = client.post(
+        "/api/orders",
+        json={"items": [{"menu_item_id": menu["samosa"].id, "quantity": 1}]},
+        headers=presence_headers_for(client),
+    )
     assert order.status_code == 409
     body = order.get_json()
     assert body["error"]["code"] == "CANTEEN_CLOSED"
@@ -171,7 +176,11 @@ def test_reopening_the_canteen_allows_orders_again(app, admin_client, client, me
     admin_client.patch("/api/admin/canteen/status", json={"is_accepting_orders": False})
     admin_client.patch("/api/admin/canteen/status", json={"is_accepting_orders": True})
     assert app.test_client().get("/api/canteen/status").get_json()["is_accepting_orders"] is True
-    order = client.post("/api/orders", json={"items": [{"menu_item_id": menu["samosa"].id, "quantity": 1}]})
+    order = client.post(
+        "/api/orders",
+        json={"items": [{"menu_item_id": menu["samosa"].id, "quantity": 1}]},
+        headers=presence_headers_for(client),
+    )
     assert order.status_code == 201
 
 

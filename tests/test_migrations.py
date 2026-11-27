@@ -155,7 +155,7 @@ def database_url(request, tmp_path):
 
 # ---------- History integrity ----------
 
-def test_migration_history_is_a_single_linear_chain():
+def test_migration_history_has_one_base_and_one_head():
     script = _script()
 
     assert len(script.get_heads()) == 1
@@ -192,9 +192,7 @@ def test_upgrade_is_idempotent_at_head(database_url):
 # ---------- Downgrades and re-upgrades ----------
 
 def test_every_revision_downgrades_and_upgrades_again(database_url):
-    _run_flask(["db", "upgrade"], database_url)
-
-    # Walk down one revision at a time, then back up. The script records each step.
+    # Exercise each revision in isolation because a single-head history may contain merge points.
     output = _run_python(
         f"""
 import json
@@ -207,22 +205,24 @@ script = ScriptDirectory({str(MIGRATIONS_DIR)!r})
 revisions = list(script.walk_revisions())  # newest first
 steps = []
 with app.app_context():
-    for rev in revisions:
-        target = rev.down_revision or "base"
-        downgrade(directory={str(MIGRATIONS_DIR)!r}, revision=target)
-        steps.append(["down", rev.revision])
     for rev in reversed(revisions):
+        downgrade(directory={str(MIGRATIONS_DIR)!r}, revision="base")
         upgrade(directory={str(MIGRATIONS_DIR)!r}, revision=rev.revision)
+        if not isinstance(rev.down_revision, tuple):
+            target = rev.down_revision or "base"
+            downgrade(directory={str(MIGRATIONS_DIR)!r}, revision=target)
+            upgrade(directory={str(MIGRATIONS_DIR)!r}, revision=rev.revision)
+        steps.append(["down", rev.revision])
         steps.append(["up", rev.revision])
+    upgrade(directory={str(MIGRATIONS_DIR)!r}, revision="head")
 print("STEPS " + json.dumps(steps))
 """,
         database_url,
     )
     steps = json.loads(next(line for line in output.splitlines() if line.startswith("STEPS ")).removeprefix("STEPS "))
 
-    revisions = [rev.revision for rev in _script().walk_revisions()]
-    assert steps[: len(revisions)] == [["down", rev] for rev in revisions]
-    assert steps[len(revisions):] == [["up", rev] for rev in reversed(revisions)]
+    revisions = [rev.revision for rev in reversed(list(_script().walk_revisions()))]
+    assert steps == [entry for rev in revisions for entry in (["down", rev], ["up", rev])]
     assert _current_revision(database_url) == _head()
     assert _schema_drift(database_url) == []
 
@@ -293,7 +293,7 @@ def test_downgrade_then_upgrade_preserves_surviving_data(database_url):
         conn.execute(text(
             "INSERT INTO menu_items (name, category, price_paise, is_available, stock_quantity, "
             "reserved_quantity, created_at, updated_at) VALUES "
-            "('Tea', 'Drinks', 1000, :available, 30, 0, :now, :now)"
+            "('Migration Preservation Tea', 'Drinks', 1000, :available, 30, 0, :now, :now)"
         ), {"available": True, "now": "2026-11-20 10:00:00"})
     engine.dispose()
 
@@ -302,10 +302,12 @@ def test_downgrade_then_upgrade_preserves_surviving_data(database_url):
 
     engine = create_engine(database_url)
     with engine.connect() as conn:
-        name, stock = conn.execute(text("SELECT name, stock_quantity FROM menu_items")).one()
+        name, stock = conn.execute(text(
+            "SELECT name, stock_quantity FROM menu_items WHERE name = 'Migration Preservation Tea'"
+        )).one()
     engine.dispose()
 
-    assert (name, stock) == ("Tea", 30)
+    assert (name, stock) == ("Migration Preservation Tea", 30)
     assert _schema_drift(database_url) == []
 
 

@@ -144,6 +144,37 @@ class Config:
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
+    CANTEEN_LATITUDE = (
+        float(os.environ["CANTEEN_LATITUDE"]) if os.getenv("CANTEEN_LATITUDE") else None
+    )
+    CANTEEN_LONGITUDE = (
+        float(os.environ["CANTEEN_LONGITUDE"]) if os.getenv("CANTEEN_LONGITUDE") else None
+    )
+    PRESENCE_RADIUS_METERS = _positive_int_env("PRESENCE_RADIUS_METERS", 100)
+    PRESENCE_MAX_ACCURACY_METERS = _positive_int_env("PRESENCE_MAX_ACCURACY_METERS", 75)
+    PRESENCE_GPS_MAX_AGE_SECONDS = _positive_int_env("PRESENCE_GPS_MAX_AGE_SECONDS", 60)
+    PRESENCE_TOKEN_TTL_SECONDS = _positive_int_env("PRESENCE_TOKEN_TTL_SECONDS", 10)
+    PRESENCE_SESSION_TTL_SECONDS = _positive_int_env("PRESENCE_SESSION_TTL_SECONDS", 180)
+    PRESENCE_RETENTION_DAYS = _positive_int_env("PRESENCE_RETENTION_DAYS", 30)
+    PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+
+    RECOVERY_DELIVERY = os.getenv("RECOVERY_DELIVERY", "smtp")
+    RECOVERY_CODE_MINUTES = _positive_int_env("RECOVERY_CODE_MINUTES", 5)
+    RECOVERY_RESET_MINUTES = _positive_int_env("RECOVERY_RESET_MINUTES", 10)
+    RECOVERY_RESEND_SECONDS = _positive_int_env("RECOVERY_RESEND_SECONDS", 30)
+    RECOVERY_MAX_CODES_PER_HOUR = _positive_int_env("RECOVERY_MAX_CODES_PER_HOUR", 5)
+    RECOVERY_MAX_ATTEMPTS = _positive_int_env("RECOVERY_MAX_ATTEMPTS", 5)
+    ALLOW_CONSOLE_DELIVERY = os.getenv("ALLOW_CONSOLE_DELIVERY", "false").lower() == "true"
+    SMTP_HOST = os.getenv("SMTP_HOST", "")
+    SMTP_PORT = _positive_int_env("SMTP_PORT", 587)
+    SMTP_FROM = os.getenv("SMTP_FROM", "")
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    PHONEPE_SALT_KEY = os.getenv("PHONEPE_SALT_KEY", "")
+    PHONEPE_SALT_INDEX = os.getenv("PHONEPE_SALT_INDEX", "1")
+    UPI_VPA = os.getenv("UPI_VPA", "")
+
     # Firebase project endpoint is deployment configuration, not source code.
     FIREBASE_ENABLED = os.getenv("FIREBASE_ENABLED", "false").lower() == "true"
     FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "").strip()
@@ -170,6 +201,11 @@ class TestingConfig(Config):
     RAZORPAY_WEBHOOK_SECRET = "test_webhook_secret"  # nosec B105
     FIREBASE_ENABLED = False
     MAIL_BACKEND = "memory"
+    RECOVERY_DELIVERY = "memory"
+    CANTEEN_LATITUDE = 0.0
+    CANTEEN_LONGITUDE = 0.0
+    PHONEPE_SALT_KEY = "test_phonepe_salt_key_1234567890"
+    UPI_VPA = "canteen@ybl"
 
 
 class ProductionConfig(Config):

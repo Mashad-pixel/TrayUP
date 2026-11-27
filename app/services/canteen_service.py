@@ -10,7 +10,10 @@ CLOSED_MESSAGE_MAX_LENGTH = 200
 ALLOWED_FIELDS = frozenset({"is_accepting_orders", "closed_message"})
 NAME_MAX_LENGTH_DETAILS = 120
 HOURS_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
-DETAIL_FIELDS = frozenset({"canteen_name", "name", "opens_at", "closes_at", "is_accepting_orders", "closed_message"})
+DETAIL_FIELDS = frozenset({
+    "canteen_name", "name", "opens_at", "closes_at", "is_accepting_orders", "closed_message",
+    "payment_provider", "merchant_display_name", "upi_vpa", "cash_enabled", "cash_max_order_paise",
+})
 DEFAULT_NAME = "TrayUP Canteen"
 DEFAULT_OPENS = time(8, 0)
 DEFAULT_CLOSES = time(18, 0)
@@ -77,6 +80,11 @@ def get_settings():
         "name": settings.canteen_name if settings else DEFAULT_NAME,
         "opens_at": _format_time(settings.opens_at) if settings else "08:00",
         "closes_at": _format_time(settings.closes_at) if settings else "18:00",
+        "payment_provider": settings.payment_provider if settings else "sandbox",
+        "merchant_display_name": settings.merchant_display_name if settings else DEFAULT_NAME,
+        "upi_vpa": settings.upi_vpa if settings else None,
+        "cash_enabled": settings.cash_enabled if settings else False,
+        "cash_max_order_paise": settings.cash_max_order_paise if settings else 15000,
     }
 
 
@@ -135,6 +143,46 @@ def update_details(data):
             closed_message = raw_message.strip() if isinstance(raw_message, str) and raw_message.strip() else None
     if accepting:
         closed_message = None
+
+    payment_provider = current.payment_provider if current else "sandbox"
+    if "payment_provider" in data:
+        value = data["payment_provider"]
+        if value not in {"sandbox", "upi", "phonepe"}:
+            errors["payment_provider"] = "Choose sandbox, upi or phonepe."
+        else:
+            payment_provider = value
+    merchant_display_name = current.merchant_display_name if current else DEFAULT_NAME
+    if "merchant_display_name" in data:
+        value = data["merchant_display_name"]
+        cleaned = " ".join(value.split()) if isinstance(value, str) else ""
+        if not cleaned:
+            errors["merchant_display_name"] = "Must be a non-empty name."
+        elif len(cleaned) > 100:
+            errors["merchant_display_name"] = "Must be at most 100 characters."
+        else:
+            merchant_display_name = cleaned
+    upi_vpa = current.upi_vpa if current else None
+    if "upi_vpa" in data:
+        value = data["upi_vpa"]
+        if value is not None and (
+            not isinstance(value, str) or not value.strip() or "@" not in value or len(value) > 100
+        ):
+            errors["upi_vpa"] = "Enter a valid UPI address."
+        else:
+            upi_vpa = value.strip() if isinstance(value, str) else None
+    cash_enabled = current.cash_enabled if current else False
+    if "cash_enabled" in data:
+        if not isinstance(data["cash_enabled"], bool):
+            errors["cash_enabled"] = "Must be true or false."
+        else:
+            cash_enabled = data["cash_enabled"]
+    cash_max_order_paise = current.cash_max_order_paise if current else 15000
+    if "cash_max_order_paise" in data:
+        value = data["cash_max_order_paise"]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            errors["cash_max_order_paise"] = "Must be a non-negative whole number of paise."
+        else:
+            cash_max_order_paise = value
     if errors:
         raise ServiceValidationError(errors, "Canteen details are invalid.")
     if current is None:
@@ -143,5 +191,10 @@ def update_details(data):
     current.canteen_name, current.opens_at, current.closes_at = name, opens, closes
     current.is_accepting_orders = accepting
     current.closed_message = closed_message
+    current.payment_provider = payment_provider
+    current.merchant_display_name = merchant_display_name
+    current.upi_vpa = upi_vpa
+    current.cash_enabled = cash_enabled
+    current.cash_max_order_paise = cash_max_order_paise
     db.session.commit()
     return get_settings()

@@ -30,6 +30,7 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    password_changed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Two-factor authentication (TOTP). Administrators must enable it before they can use
     # admin features; see app/__init__.py. The secret is base32 and is only used by the server.

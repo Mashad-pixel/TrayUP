@@ -14,6 +14,7 @@ class OrderStatus:
 
 class PaymentStatus:
     PENDING = "pending"
+    AWAITING_CONFIRMATION = "awaiting_confirmation"
     PAID = "paid"
     FAILED = "failed"
     REFUNDED = "refunded"
@@ -60,6 +61,8 @@ class Order(db.Model):
     customer_name = db.Column(db.String(100), nullable=True)
     customer_phone = db.Column(db.String(20), nullable=True)
     instructions = db.Column(db.String(500), nullable=True)
+    payment_method = db.Column(db.String(32), nullable=True)
+    utr_number = db.Column(db.String(32), nullable=True, unique=True, index=True)
 
     subtotal_paise = db.Column(db.Integer, nullable=False, default=0)
     discount_paise = db.Column(db.Integer, nullable=False, default=0)
