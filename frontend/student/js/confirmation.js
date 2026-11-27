@@ -6,7 +6,7 @@
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
   })[character]);
   const paidStatuses = ["paid", "captured", "completed", "success"];
-  const PAYMENT_LABELS = { pending: "Pay at the counter", failed: "Payment failed", refunded: "Refunded", partially_refunded: "Partially refunded" };
+  const PAYMENT_LABELS = { pending: "Online payment pending", failed: "Payment failed", refunded: "Refunded", partially_refunded: "Partially refunded", paid: "Paid" };
 
   function showUnavailable(title, message) {
     $("confirmation-title").textContent = title;
@@ -52,7 +52,7 @@
   $("receipt-number").textContent = order.order_number || "Pending";
   $("confirmation-name").textContent = order.customer_name || "Not provided";
   $("confirmation-phone").textContent = order.customer_phone || "Not provided";
-  $("confirmation-payment").textContent = PAYMENT_LABELS[order.payment_status] || "Pay at the counter";
+  $("confirmation-payment").textContent = PAYMENT_LABELS[order.payment_status] || "Payment status unavailable";
   $("confirmation-instructions").textContent = order.instructions || "No special instructions";
 
   $("payment-progress").classList.remove("complete");
@@ -60,8 +60,14 @@
   if (order.order_status === "cancelled") {
     $("confirmation-title").textContent = "Order cancelled";
     $("confirmation-copy").textContent = "This order was cancelled. Ask the canteen counter if you need help.";
+  } else if (order.payment_status === "pending") {
+    $("confirmation-title").textContent = "Payment pending";
+    $("confirmation-copy").textContent = "Your order has been saved, but online payment has not been confirmed. Check My Orders before attempting another payment.";
+  } else if (order.payment_status === "failed") {
+    $("confirmation-title").textContent = "Payment failed";
+    $("confirmation-copy").textContent = "Payment was not confirmed. Check My Orders for the latest order status.";
   } else {
-    $("confirmation-copy").textContent = "Your order is confirmed. Pay at the counter to complete payment.";
+    $("confirmation-copy").textContent = "Your order status is shown below. Check My Orders for the latest updates.";
   }
 
   // Dish photos come from the menu catalog. The order itself only stores names and quantities.

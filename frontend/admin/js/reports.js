@@ -1,185 +1,198 @@
-// Sales reports for a chosen range of canteen days. Every figure is loaded from /api/admin/reports/*.
+// Reports from the reporting API. Every figure comes from the server for the chosen canteen-local days.
+// The CSV export is built from the same sales rows shown on the page.
 (function () {
   "use strict";
-  const P = window.adminPanel;
-  const el = P.el;
+
+  const ui = window.trayUI;
+  const root = document.querySelector(".admin-content");
+
   const MAX_DAYS = 366;
+  let period = null;     // { from, to }
+  let data = null;       // loaded report bodies
+  let problem = null;    // message for an invalid range or a failed load
 
-  function rangeFor(preset, today) {
-    if (preset === "today") return { from: today, to: today };
-    if (preset === "7") return { from: P.addDays(today, -6), to: today };
-    return { from: P.addDays(today, -29), to: today };
+  const ORDER_STATUS_LABELS = { received: "Received", preparing: "Preparing", ready: "Ready", collected: "Collected", cancelled: "Cancelled" };
+  const PAYMENT_LABELS = { pending: "Pending", paid: "Paid", failed: "Failed", refunded: "Refunded", partially_refunded: "Partly refunded" };
+
+  function rupees(paise) {
+    return (Number(paise || 0) / 100).toFixed(2);
   }
 
-  function statusTiles(stats) {
-    const names = { pending_payment: "Awaiting payment", received: "Received", preparing: "Preparing", ready: "Ready", collected: "Collected", cancelled: "Cancelled" };
-    const byStatus = stats.by_order_status || {};
-    return el("div", null, Object.entries(names).map(([key, label]) =>
-      el("div", { class: "status-tile" }, [
-        el("span", { text: label }),
-        el("strong", { text: String(byStatus[key] || 0) })
-      ])));
+  function dayCount(from, to) {
+    return Math.round((new Date(to + "T00:00:00Z") - new Date(from + "T00:00:00Z")) / 86400000) + 1;
   }
 
-  function csvRows(sales, items, categories, hours) {
-    const rows = [["Section", "Date or name", "Orders or quantity", "Revenue (₹)", "Refunded (₹)"]];
-    sales.days.forEach((d) => rows.push(["Day", d.date, d.orders, (d.revenue_paise / 100).toFixed(2), (d.refunded_paise / 100).toFixed(2)]));
-    items.forEach((i) => rows.push(["Item", i.item_name, i.quantity, (i.revenue_paise / 100).toFixed(2), ""]));
-    categories.forEach((c) => rows.push(["Category", c.category, c.quantity, (c.revenue_paise / 100).toFixed(2), ""]));
-    hours.filter((h) => h.orders > 0).forEach((h) => rows.push(["Hour", String(h.hour).padStart(2, "0") + ":00", h.orders, "", ""]));
-    return rows;
+  function validatePeriod(from, to) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return "Choose both dates.";
+    if (from > to) return "The start date must be on or before the end date.";
+    if (dayCount(from, to) > MAX_DAYS) return `Choose a range of ${MAX_DAYS} days or fewer.`;
+    return null;
   }
 
-  P.start({
-    page: "reports",
-    title: "Reports",
-    run: ({ content }) => {
-      const today = P.canteenToday();
-      const state = { preset: "30", from: P.addDays(today, -29), to: today, data: null };
+  function stat(label, value) {
+    return ui.el("div", { class: "admin-card" }, [ui.el("span", { text: label }), ui.el("div", { class: "value", text: value })]);
+  }
 
-      const presetButtons = [["today", "Today"], ["7", "7 days"], ["30", "30 days"], ["custom", "Custom"]].map(([key, label]) =>
-        el("button", { type: "button", "aria-pressed": String(state.preset === key), dataset: { preset: key }, text: label, onclick: () => choosePreset(key) }));
-      const segmented = el("div", { class: "segmented", role: "group", "aria-label": "Date range" }, presetButtons);
-      const fromField = P.field({ label: "From", name: "from", type: "date", value: state.from, max: today });
-      const toField = P.field({ label: "To", name: "to", type: "date", value: state.to, max: today });
-      const applyButton = el("button", { class: "btn btn-primary", type: "button", text: "Apply", onclick: () => applyCustom() });
-      const customBar = el("div", { class: "toolbar", hidden: true }, [fromField.node, toField.node, applyButton]);
-      const exportButton = el("button", { class: "btn btn-ghost", type: "button", text: "Export CSV", disabled: true, onclick: () => exportCsv() });
-      const body = el("div", { class: "stack" });
+  function summaryCards() {
+    const o = data.overview;
+    return ui.el("div", { class: "admin-stats" }, [
+      stat("Orders", String(o.total_orders)),
+      stat("Paid", String(o.paid_orders)),
+      stat("Cancelled", String(o.cancelled_orders)),
+      stat("Gross revenue", ui.money(o.gross_revenue_paise)),
+      stat("Refunded", ui.money(o.refunded_paise)),
+      stat("Net revenue", ui.money(o.net_revenue_paise)),
+      stat("Average order", ui.money(o.average_order_value_paise)),
+      stat("Collected", `${o.completion_rate_percent}%`),
+      stat("Avg. preparation", o.average_preparation_minutes === null ? "—" : `${o.average_preparation_minutes} min`)
+    ]);
+  }
 
-      content.replaceChildren(
-        P.pageHead("Reports", "Revenue, popular items and busy hours, in canteen time. Refunds reduce revenue on the day they were issued.", [exportButton]),
-        el("div", { class: "toolbar" }, [segmented]),
-        customBar,
-        body
+  function salesTable() {
+    const rows = data.sales.days.map((day) => ui.el("tr", null, [
+      ui.el("td", { text: ui.formatDay(day.date) }),
+      ui.el("td", { class: "ui-num", text: String(day.orders) }),
+      ui.el("td", { class: "ui-num", text: ui.money(day.revenue_paise) }),
+      ui.el("td", { class: "ui-num", text: ui.money(day.refunded_paise) }),
+      ui.el("td", { class: "ui-num", text: ui.money(day.revenue_paise - day.refunded_paise) })
+    ]));
+    return ui.table(
+      [{ label: "Day" }, { label: "Orders", numeric: true }, { label: "Revenue", numeric: true }, { label: "Refunded", numeric: true }, { label: "Net", numeric: true }],
+      rows
+    );
+  }
+
+  function popularTable() {
+    const rows = data.popular.items.map((item) => ui.el("tr", null, [
+      ui.el("td", { text: item.item_name }),
+      ui.el("td", { class: "ui-num", text: String(item.quantity) }),
+      ui.el("td", { class: "ui-num", text: ui.money(item.revenue_paise) })
+    ]));
+    return ui.table([{ label: "Item" }, { label: "Sold", numeric: true }, { label: "Revenue", numeric: true }], rows);
+  }
+
+  function categoryTable() {
+    const rows = data.categories.categories.map((c) => ui.el("tr", null, [
+      ui.el("td", { text: c.category }),
+      ui.el("td", { class: "ui-num", text: String(c.quantity) }),
+      ui.el("td", { class: "ui-num", text: ui.money(c.revenue_paise) })
+    ]));
+    return ui.table([{ label: "Category" }, { label: "Sold", numeric: true }, { label: "Revenue", numeric: true }], rows);
+  }
+
+  function peakTable() {
+    const hours = data.peak.hours;
+    const busiest = Math.max(1, ...hours.map((h) => h.orders));
+    const rows = hours.filter((h) => h.orders > 0).map((h) => ui.el("tr", null, [
+      ui.el("td", { text: `${String(h.hour).padStart(2, "0")}:00–${String((h.hour + 1) % 24).padStart(2, "0")}:00` }),
+      ui.el("td", { class: "ui-num", text: String(h.orders) }),
+      ui.el("td", null, [ui.el("div", { class: "ui-bar", style: `width:${Math.round((h.orders / busiest) * 100)}%` })])
+    ]));
+    const offset = data.peak.timezone_offset_minutes;
+    const sign = offset >= 0 ? "+" : "-";
+    const label = `${sign}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, "0")}:${String(Math.abs(offset) % 60).padStart(2, "0")}`;
+    return ui.el("div", null, [
+      ui.el("p", { class: "ui-muted", text: `Hours are in canteen time (UTC${label}).` }),
+      ui.table([{ label: "Hour" }, { label: "Orders", numeric: true }, { label: "Busiest" }], rows)
+    ]);
+  }
+
+  function statusTable(title, source, labels) {
+    const rows = Object.entries(source || {}).map(([key, count]) => ui.el("tr", null, [
+      ui.el("td", { text: labels[key] || key }),
+      ui.el("td", { class: "ui-num", text: String(count) })
+    ]));
+    return ui.el("div", null, [ui.el("h2", { style: "font-size:16px;margin:0 0 8px", text: title }), ui.table([{ label: "Status" }, { label: "Orders", numeric: true }], rows)]);
+  }
+
+  function render() {
+    const toolbar = ui.el("div", { class: "ui-toolbar" }, [
+      ui.el("label", { class: "ui-field" }, ["From", ui.el("input", { id: "from", type: "date", value: period.from })]),
+      ui.el("label", { class: "ui-field" }, ["To", ui.el("input", { id: "to", type: "date", value: period.to })]),
+      ui.el("button", { class: "btn btn-primary", type: "button", id: "apply", text: "Show" }),
+      ui.el("button", { class: "btn btn-secondary", type: "button", id: "export", disabled: !data, text: "Export sales CSV" })
+    ]);
+    const body = [];
+    if (problem) body.push(ui.notice(problem, "warning"));
+    if (data) {
+      body.push(
+        ui.el("div", { class: "ui-section" }, [ui.el("h2", { text: "Summary" }), summaryCards()]),
+        ui.el("div", { class: "ui-section" }, [ui.el("h2", { text: "Sales by day" }), salesTable()]),
+        ui.el("div", { class: "ui-section" }, [ui.el("h2", { text: "Popular items" }), popularTable()]),
+        ui.el("div", { class: "ui-section" }, [ui.el("h2", { text: "Categories" }), categoryTable()]),
+        ui.el("div", { class: "ui-section" }, [ui.el("h2", { text: "Busiest hours" }), peakTable()]),
+        ui.el("div", { class: "ui-section" }, [ui.el("h2", { text: "Order status" }),
+          ui.el("div", { class: "ui-grid" }, [
+            statusTable("By order status", data.orders.by_order_status, ORDER_STATUS_LABELS),
+            statusTable("By payment status", data.orders.by_payment_status, PAYMENT_LABELS)
+          ])])
       );
-
-      function choosePreset(key) {
-        state.preset = key;
-        presetButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.preset === key)));
-        customBar.hidden = key !== "custom";
-        if (key !== "custom") {
-          const range = rangeFor(key, today);
-          state.from = range.from;
-          state.to = range.to;
-          load();
-        }
-      }
-
-      function applyCustom() {
-        const from = fromField.input.value;
-        const to = toField.input.value;
-        const days = P.dayCount(from, to);
-        const error = !from || !to ? "Choose both dates."
-          : Number.isNaN(days) ? "Enter valid dates."
-          : days < 1 ? "The end date must be on or after the start date."
-          : days > MAX_DAYS ? "Choose a range of " + MAX_DAYS + " days or fewer."
-          : to > today ? "The end date cannot be in the future."
-          : "";
-        if (error) { P.toast(error, "danger"); return; }
-        state.from = from;
-        state.to = to;
-        load();
-      }
-
-      function exportCsv() {
-        if (!state.data) return;
-        const d = state.data;
-        P.downloadCsv("trayup-report-" + state.from + "-to-" + state.to + ".csv",
-          csvRows(d.sales, d.items, d.categories, d.hours));
-      }
-
-      function render(d) {
-        const o = d.overview;
-        const salesDays = d.sales.days || [];
-        body.replaceChildren(
-          el("div", { class: "grid grid-stats" }, [
-            P.stat("Orders", String(o.total_orders), o.cancelled_orders + " cancelled"),
-            P.stat("Paid orders", String(o.paid_orders)),
-            P.stat("Gross revenue", P.money(o.gross_revenue_paise)),
-            P.stat("Refunded", P.money(o.refunded_paise)),
-            P.stat("Net revenue", P.money(o.net_revenue_paise), "After refunds", "accent"),
-            P.stat("Average order", P.money(o.average_order_value_paise), "Paid orders")
-          ]),
-          el("div", { class: "grid grid-2", style: "margin-top:18px" }, [
-            P.card({
-              title: "Revenue by day",
-              body: salesDays.length
-                ? el("div", { class: "table-wrap" }, [el("table", { class: "data-table" }, [
-                    el("thead", null, [el("tr", null, [el("th", { text: "Day" }), el("th", { class: "num", text: "Orders" }), el("th", { class: "num", text: "Revenue" }), el("th", { class: "num", text: "Refunded" })])]),
-                    el("tbody", null, salesDays.map((x) => el("tr", null, [
-                      el("td", { text: P.formatDay(x.date) }),
-                      el("td", { class: "num", text: String(x.orders) }),
-                      el("td", { class: "num", text: P.money(x.revenue_paise) }),
-                      el("td", { class: "num", text: P.money(x.refunded_paise) })
-                    ])))
-                  ])])
-                : P.empty("No sales in this period.")
-            }),
-            P.card({ title: "Order statuses", body: statusTiles(d.orderStats) })
-          ]),
-          el("div", { class: "grid grid-2", style: "margin-top:18px" }, [
-            P.card({
-              title: "Popular items",
-              body: P.rankedList(d.items.items || [], {
-                label: (i) => i.item_name,
-                value: (i) => i.quantity,
-                format: (i) => i.quantity + " sold · " + P.money(i.revenue_paise)
-              })
-            }),
-            P.card({
-              title: "Categories",
-              body: P.rankedList(d.categories.categories || [], {
-                label: (c) => c.category,
-                value: (c) => c.revenue_paise,
-                format: (c) => c.quantity + " sold · " + P.money(c.revenue_paise)
-              })
-            })
-          ]),
-          P.card({
-            title: "Busiest hours",
-            subtitle: "Orders placed in each hour of the canteen day",
-            body: d.hours.hours.some((h) => h.orders > 0)
-              ? P.barChart(d.hours.hours, {
-                  label: "Orders by hour",
-                  value: (h) => h.orders,
-                  caption: (h) => (h.hour % 3 === 0 ? String(h.hour).padStart(2, "0") : ""),
-                  tooltip: (h) => String(h.hour).padStart(2, "0") + ":00 — " + h.orders + " order(s)"
-                })
-              : P.empty("No orders in this period.")
-          })
-        );
-      }
-
-      async function load() {
-        body.replaceChildren(P.loading("Loading report…"));
-        exportButton.disabled = true;
-        const query = "from=" + state.from + "&to=" + state.to;
-        try {
-          const [overview, sales, items, categories, hours, orderStats] = await Promise.all([
-            trayApi.get("/admin/reports/overview?" + query),
-            trayApi.get("/admin/reports/sales?" + query),
-            trayApi.get("/admin/reports/popular-items?" + query + "&limit=10"),
-            trayApi.get("/admin/reports/categories?" + query),
-            trayApi.get("/admin/reports/peak-hours?" + query),
-            trayApi.get("/admin/reports/orders?" + query)
-          ]);
-          state.data = {
-            overview: P.unwrap(overview),
-            sales: P.unwrap(sales),
-            items: P.unwrap(items),
-            categories: P.unwrap(categories),
-            hours: P.unwrap(hours),
-            orderStats: P.unwrap(orderStats)
-          };
-          render(state.data);
-          exportButton.disabled = false;
-        } catch (error) {
-          body.replaceChildren(P.errorNotice(error));
-        }
-      }
-
-      load();
     }
+    root.replaceChildren(
+      ui.header("Reports", null),
+      ui.el("p", { class: "ui-muted", style: "margin-top:10px", text: "Figures are for the days you choose, in canteen time. Refunds are subtracted from revenue on the day they were issued." }),
+      toolbar,
+      ...body
+    );
+  }
+
+  async function load() {
+    const query = `from=${period.from}&to=${period.to}`;
+    try {
+      const [overview, sales, popular, categories, peak, orders] = await Promise.all([
+        trayApi.get(`/admin/reports/overview?${query}`),
+        trayApi.get(`/admin/reports/sales?${query}`),
+        trayApi.get(`/admin/reports/popular-items?${query}&limit=10`),
+        trayApi.get(`/admin/reports/categories?${query}`),
+        trayApi.get(`/admin/reports/peak-hours?${query}`),
+        trayApi.get(`/admin/reports/orders?${query}`)
+      ]);
+      data = {
+        overview: overview.data,
+        sales: sales.data,
+        popular: popular.data,
+        categories: categories.data,
+        peak: peak.data,
+        orders: orders.data
+      };
+      problem = null;
+    } catch (error) {
+      data = null;
+      problem = ui.describeError(error).text;
+    }
+    render();
+  }
+
+  function apply() {
+    const from = root.querySelector("#from").value;
+    const to = root.querySelector("#to").value;
+    const invalid = validatePeriod(from, to);
+    if (invalid) {
+      problem = invalid;
+      data = null;
+      render();
+      return;
+    }
+    period = { from, to };
+    problem = null;
+    load();
+  }
+
+  function exportSales() {
+    if (!data) return;
+    const rows = [["Day", "Orders", "Revenue (INR)", "Refunded (INR)", "Net (INR)"]];
+    data.sales.days.forEach((day) => {
+      rows.push([day.date, day.orders, rupees(day.revenue_paise), rupees(day.refunded_paise), rupees(day.revenue_paise - day.refunded_paise)]);
+    });
+    ui.downloadCsv(`sales-${period.from}-to-${period.to}.csv`, rows);
+  }
+
+  root.addEventListener("click", (event) => {
+    if (event.target.closest("#apply")) apply();
+    else if (event.target.closest("#export")) exportSales();
   });
+
+  period = { from: ui.addDays(ui.canteenToday(), -29), to: ui.canteenToday() };
+  render();
+  load();
 })();

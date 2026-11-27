@@ -362,8 +362,13 @@
   }
 
   function saveCart(cart) {
-    trayStorage.set("trayup-cart", cart);
+    if (!trayStorage.set("trayup-cart", cart)) {
+      trayNotify("Your browser blocked cart storage. Enable site storage and try again.");
+      renderCart();
+      return false;
+    }
     renderCart();
+    return true;
   }
 
   function renderCart() {
@@ -430,8 +435,8 @@
       const change = quantityButton ? Number(quantityButton.dataset.cardQty) : 1;
       if (item) item.qty += change;
       else if (change > 0) cart.push({ id: product.id, name: product.name, price: product.price, image: product.image, qty: change });
-      saveCart(cart.filter((entry) => entry.qty > 0));
-      if (change > 0 && window.trayNotify) window.trayNotify("Good choice! Added to your tray.");
+      const saved = saveCart(cart.filter((entry) => entry.qty > 0));
+      if (saved && change > 0 && window.trayNotify) window.trayNotify("Good choice! Added to your tray.");
       return;
     }
     const card = event.target.closest(".food-card");

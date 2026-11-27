@@ -52,10 +52,10 @@
     ],
 
     orders: [
-      { id: "TY1001", items: [{ productId: 12, quantity: 1 }], total: 150, status: "Delivered" },
+      { id: "TY1001", items: [{ productId: 12, quantity: 1 }], total: 150, status: "Collected" },
       { id: "TY1002", items: [{ productId: 1, quantity: 2 }], total: 120, status: "Preparing" },
       { id: "TY1003", items: [{ productId: 34, quantity: 1 }, { productId: 26, quantity: 1 }], total: 150, status: "On the way" },
-      { id: "TY1004", items: [{ productId: 11, quantity: 1 }], total: 120, status: "Delivered" },
+      { id: "TY1004", items: [{ productId: 11, quantity: 1 }], total: 120, status: "Collected" },
       { id: "TY1005", items: [{ productId: 22, quantity: 2 }], total: 30, status: "Cancelled" }
     ],
 
@@ -518,29 +518,28 @@
 
   demoData.getOrderActivity = getActivity;
   demoData.recordOrder = function (order) {
-    const orders = JSON.parse(localStorage.getItem(ordersKey) || "[]");
+    let orders = [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(ordersKey) || "[]");
+      if (Array.isArray(saved)) orders = saved;
+    } catch (_) {}
     const savedOrder = {
       ...order,
       id: order.id || nextReceiptNumber(orders),
       createdAt: order.createdAt || new Date().toISOString()
     };
     orders.unshift(savedOrder);
-    localStorage.setItem(ordersKey, JSON.stringify(orders));
+    try { localStorage.setItem(ordersKey, JSON.stringify(orders)); } catch (_) {}
 
     const activity = getActivity();
     savedOrder.items.forEach((entry) => {
       const productId = Number(entry.productId || entry.id);
       const quantity = Number(entry.quantity || entry.qty || 1);
       if (demoData.products.some((product) => product.id === productId) && quantity > 0) {
-        activity.push({
-          productId,
-          quantity,
-          orderedAt: savedOrder.createdAt,
-          orderId: savedOrder.id
-        });
+        activity.push({ productId, quantity, orderedAt: savedOrder.createdAt, orderId: savedOrder.id });
       }
     });
-    localStorage.setItem(activityKey, JSON.stringify(activity));
+    try { localStorage.setItem(activityKey, JSON.stringify(activity)); } catch (_) {}
     return savedOrder;
   };
 

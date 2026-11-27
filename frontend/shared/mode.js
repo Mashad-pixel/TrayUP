@@ -48,8 +48,14 @@
           return value ? JSON.parse(value) : fallback;
         } catch (_) { return fallback; }
       },
-      set(key, value) { sessionStorage.setItem(DEMO_PREFIX + key, JSON.stringify(value)); },
-      remove(key) { sessionStorage.removeItem(DEMO_PREFIX + key); }
+      set(key, value) {
+        try { sessionStorage.setItem(DEMO_PREFIX + key, JSON.stringify(value)); return true; }
+        catch (_) { return false; }
+      },
+      remove(key) {
+        try { sessionStorage.removeItem(DEMO_PREFIX + key); return true; }
+        catch (_) { return false; }
+      }
     };
   }
 

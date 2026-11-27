@@ -39,8 +39,12 @@
     const existing = cart.find((item) => item.id === product.id);
     if (existing) existing.qty += 1;
     else cart.push({ id: product.id, name: product.name, price: product.price, image: product.image, qty: 1 });
-    trayStorage.set("trayup-cart", cart);
+    if (!trayStorage.set("trayup-cart", cart)) {
+      trayNotify("Your browser blocked cart storage. Enable site storage and try again.");
+      return false;
+    }
     document.getElementById("cart-count").textContent = cartCount();
+    return true;
   }
 
   function renderProduct(product, all) {
@@ -146,13 +150,11 @@
 
     document.getElementById("add-product").addEventListener("click", () => {
       if (!product.isAvailable) return;
-      addProductToCart(product);
-      trayNotify(`${product.name} added to your cart`);
+      if (addProductToCart(product)) trayNotify(`${product.name} added to your cart`);
     });
     document.getElementById("order-product").addEventListener("click", () => {
       if (!product.isAvailable) return;
-      addProductToCart(product);
-      window.location.href = "./checkout.html";
+      if (addProductToCart(product)) window.location.href = "./checkout.html";
     });
     document.getElementById("add-product").disabled = !product.isAvailable;
     document.getElementById("order-product").disabled = !product.isAvailable;

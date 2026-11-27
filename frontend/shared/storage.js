@@ -109,10 +109,12 @@
       return readValue(key, fallback, validate);
     },
     set(key, value) {
-      localStorage.setItem(key, JSON.stringify(value));
+      try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+      catch (_) { return false; }
     },
     remove(key) {
-      localStorage.removeItem(key);
+      try { localStorage.removeItem(key); return true; }
+      catch (_) { return false; }
     },
     getCart() {
       return readValue(CART_KEY, [], sanitizeCart);

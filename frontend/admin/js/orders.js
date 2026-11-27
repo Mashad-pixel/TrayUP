@@ -1,190 +1,81 @@
-// Orders: list with filters and pages, a detail view with items and status history, and cancellation.
-(function () {
-  "use strict";
-  const P = window.adminPanel;
-  const el = P.el;
-  const PER_PAGE = 20;
-  const ORDER_STATUS_OPTIONS = [
-    ["", "All statuses"], ["pending_payment", "Awaiting payment"], ["received", "Received"],
-    ["preparing", "Preparing"], ["ready", "Ready"], ["collected", "Collected"], ["cancelled", "Cancelled"]
-  ];
-  const PAYMENT_OPTIONS = [
-    ["", "All payments"], ["pending", "Pending"], ["paid", "Paid"], ["failed", "Failed"],
-    ["refunded", "Refunded"], ["partially_refunded", "Partly refunded"]
-  ];
-  const CANCELLABLE = new Set(["pending_payment", "received", "preparing", "ready"]);
+(async function () {
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const body = document.getElementById("orders-body");
+  const search = document.getElementById("order-search");
+  const payment = document.getElementById("payment-filter");
+  const status = document.getElementById("status-filter");
+  let page = 1, pages = 1, busy = false, queuedPage = null, timer = null;
+  let currentOrders = [], loadError = "";
 
-  const state = { page: 1, orderStatus: "", paymentStatus: "" };
+  function render(orders = currentOrders) {
+    currentOrders = orders;
+    if (loadError) {
+      body.innerHTML = `<tr><td colspan="5">${esc(loadError)}</td></tr>`;
+      return;
+    }
+    body.innerHTML = orders.length ? orders.map(order => {
+      const student = order.student && order.student.name;
+      const amount = Number(order.total_paise || 0) / 100;
+      return `<tr><td><strong>${esc(order.order_number || order.id)}</strong></td><td>${esc(student || "Student")}</td>` +
+        `<td>₹${amount.toLocaleString("en-IN", {maximumFractionDigits:2})}</td>` +
+        `<td><span class="status">${esc(order.order_status || "—")}</span></td>` +
+        `<td>${esc(order.payment_status || "—")}</td></tr>`;
+    }).join("") : '<tr><td colspan="5">No matching orders</td></tr>';
 
-  function queryString() {
-    const params = new URLSearchParams({ page: String(state.page), per_page: String(PER_PAGE) });
-    if (state.orderStatus) params.set("order_status", state.orderStatus);
-    if (state.paymentStatus) params.set("payment_status", state.paymentStatus);
-    return params.toString();
+    const pager = document.getElementById("orders-pagination");
+    if (pager) pager.innerHTML = `<button class="btn btn-secondary" id="orders-prev" ${page <= 1 || busy ? "disabled" : ""}>Previous</button>` +
+      `<span>Page ${page} of ${Math.max(1, pages)}</span>` +
+      `<button class="btn btn-secondary" id="orders-next" ${page >= pages || busy ? "disabled" : ""}>Next</button>`;
   }
 
-  function customerOf(order) {
-    if (order.student) return order.student.name || order.student.email || "Student";
-    return order.customer_name || "Guest";
-  }
-
-  function openDetail(orderId, onChanged) {
-    const body = el("div", { class: "stack" }, [P.loading("Loading order…")]);
-    const dialog = P.modal({ title: "Order", body, wide: true });
-
-    trayApi.get("/admin/orders/" + orderId).then((response) => {
-      const order = P.unwrap(response);
-      body.replaceChildren(renderDetail(order, dialog, onChanged));
-    }).catch((error) => {
-      body.replaceChildren(P.errorNotice(error));
-    });
-  }
-
-  function renderDetail(order, dialog, onChanged) {
-    const items = order.items || [];
-    const cancellable = CANCELLABLE.has(order.order_status);
-    const needsRefund = order.order_status === "cancelled" && order.payment_status === "paid";
-
-    const lines = el("div", { class: "line-items" }, items.map((item) =>
-      el("div", { class: "line-item" }, [
-        el("div", null, [
-          el("strong", { text: item.quantity + " × " + item.item_name }),
-          el("span", { class: "cell-muted", text: P.money(item.unit_price_paise) + " each" })
-        ]),
-        el("span", { text: P.money(item.line_total_paise) })
-      ])
-    ));
-
-    const timeline = (order.status_history || []).length
-      ? el("ol", { class: "timeline" }, order.status_history.map((entry) =>
-          el("li", null, [
-            el("strong", { text: (entry.previous_status || "new") + " → " + entry.new_status }),
-            el("span", { class: "cell-muted", text: P.formatDateTime(entry.changed_at) + (entry.notes ? " · " + entry.notes : "") })
-          ])))
-      : P.empty("No status changes recorded.");
-
-    const actions = [];
-    if (cancellable) {
-      actions.push(el("button", { class: "btn btn-danger", type: "button", text: "Cancel order", onclick: () => cancelDialog(order, dialog, onChanged) }));
+  async function load(nextPage = 1) {
+    // Do not drop a search/filter change just because the previous request is still in flight.
+    // Keep only the latest requested page; the next request reads the latest control values.
+    if (busy) {
+      queuedPage = nextPage;
+      return;
     }
 
-    return el("div", { class: "stack" }, [
-      needsRefund ? P.notice("This order was cancelled after payment. Issue the refund from the Refunds page.", "warning") : null,
-      el("div", { class: "grid grid-2" }, [
-        P.card({
-          title: order.order_number,
-          subtitle: "Placed " + P.formatDateTime(order.created_at),
-          body: P.keyValues([
-            ["Status", P.orderStatusBadge(order.order_status)],
-            ["Payment", P.paymentStatusBadge(order.payment_status)],
-            ["Customer", customerOf(order)],
-            ["Phone", order.customer_phone || (order.student ? order.student.email : "—")],
-            ["Instructions", order.instructions || "None"]
-          ])
-        }),
-        P.card({
-          title: "Totals",
-          body: [
-            P.keyValues([
-              ["Subtotal", P.money(order.subtotal_paise)],
-              ["Discount", P.money(order.discount_paise)],
-              ["Tax", P.money(order.tax_paise)]
-            ]),
-            el("div", { class: "total-row" }, [el("span", { text: "Total" }), el("span", { text: P.money(order.total_paise) })])
-          ]
-        })
-      ]),
-      P.card({ title: "Items", body: lines }),
-      P.card({ title: "Status history", body: timeline }),
-      actions.length ? el("div", { class: "button-row" }, actions) : null
-    ]);
-  }
+    busy = true;
+    page = Math.max(1, Number(nextPage) || 1);
+    loadError = "";
+    body.innerHTML = '<tr><td colspan="5">Loading…</td></tr>';
 
-  function cancelDialog(order, detailDialog, onChanged) {
-    const reason = P.field({ label: "Reason", name: "reason", rows: 3, maxLength: 255, required: true, value: "", hint: "Shown in the order history. Up to 255 characters.", wide: true });
-    const error = el("div", { class: "field-error", role: "alert", hidden: true });
-    const submit = el("button", { class: "btn btn-danger", type: "submit", text: "Cancel order" });
-    const form = el("form", { class: "stack", novalidate: true }, [reason.node, error]);
-    const footer = el("div", { class: "button-row" }, [
-      el("button", { class: "btn btn-ghost", type: "button", text: "Keep order", onclick: () => dialog.close() }),
-      submit
-    ]);
-    const dialog = P.modal({ title: "Cancel " + order.order_number + "?", body: form, footer });
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const text = reason.input.value.trim();
-      if (!text) { error.textContent = "Enter a reason for the cancellation."; error.hidden = false; return; }
-      submit.disabled = true;
-      try {
-        const response = await trayApi.post("/admin/orders/" + order.id + "/cancel", { reason: text });
-        const result = P.unwrap(response);
-        dialog.close();
-        detailDialog.close();
-        P.toast(result.refund_required
-          ? "Order cancelled. Its payment must be refunded on the Refunds page."
-          : "Order cancelled.", "success");
-        onChanged();
-      } catch (err) {
-        error.textContent = P.describeError(err).text;
-        error.hidden = false;
-        submit.disabled = false;
+    const params = new URLSearchParams({page:String(page), per_page:"10"});
+    if (search.value.trim()) params.set("search", search.value.trim());
+    if (payment.value) params.set("payment_status", payment.value);
+    if (status.value) params.set("order_status", status.value);
+
+    try {
+      const response = await trayApi.get(`/admin/orders?${params.toString()}`);
+      const data = response?.data || {};
+      pages = Math.max(1, Number(data.pagination?.pages) || 1);
+      currentOrders = Array.isArray(data.orders) ? data.orders : [];
+    } catch (error) {
+      currentOrders = [];
+      loadError = error.status===401 ? "Please sign in to view administrator orders." : error.status===403 ? "Administrator access is required." : error.message || "Unable to load orders. Please retry.";
+      const pager = document.getElementById("orders-pagination");
+      if (pager) pager.replaceChildren();
+    } finally {
+      busy = false;
+      if (queuedPage !== null) {
+        const requestedPage = queuedPage;
+        queuedPage = null;
+        void load(requestedPage);
+      } else {
+        render();
       }
-    });
-    reason.input.focus();
-  }
-
-  P.start({
-    page: "orders",
-    title: "Orders",
-    run: ({ content }) => {
-      const orderStatus = P.field({ label: "Order status", name: "order_status", options: ORDER_STATUS_OPTIONS, value: "" });
-      const paymentStatus = P.field({ label: "Payment", name: "payment_status", options: PAYMENT_OPTIONS, value: "" });
-      orderStatus.input.addEventListener("change", () => { state.orderStatus = orderStatus.input.value; state.page = 1; load(); });
-      paymentStatus.input.addEventListener("change", () => { state.paymentStatus = paymentStatus.input.value; state.page = 1; load(); });
-
-      const results = el("div");
-      const pager = el("div", { class: "pager" });
-      const refresh = el("button", { class: "btn btn-ghost", type: "button", text: "Refresh", onclick: () => load() });
-
-      content.replaceChildren(
-        P.pageHead("Orders", "Every order, newest first. Open an order to see its items, history and actions.", [refresh]),
-        el("div", { class: "toolbar" }, [orderStatus.node, paymentStatus.node]),
-        el("div", { class: "card" }, [el("div", { class: "card-body" }, [results, pager])])
-      );
-
-      async function load() {
-        results.replaceChildren(P.loading("Loading orders…"));
-        pager.replaceChildren();
-        try {
-          const data = P.unwrap(await trayApi.get("/admin/orders?" + queryString()));
-          const orders = data.orders || [];
-          const info = data.pagination || { page: 1, pages: 1, total: orders.length };
-          results.replaceChildren(P.table(
-            [{ label: "Order" }, { label: "Customer" }, { label: "Total", numeric: true }, { label: "Status" }, { label: "Payment" }, { label: "Placed" }, { label: "" }],
-            orders.map((order) => [
-              el("span", { class: "cell-strong", text: order.order_number }),
-              customerOf(order),
-              el("span", { text: P.money(order.total_paise) }),
-              P.orderStatusBadge(order.order_status),
-              P.paymentStatusBadge(order.payment_status),
-              el("span", { class: "cell-muted", text: P.formatDateTime(order.created_at) }),
-              el("button", { class: "btn btn-ghost btn-small", type: "button", text: "Open", "aria-label": "Open order " + order.order_number, onclick: () => openDetail(order.id, load) })
-            ]),
-            "No orders match these filters."
-          ));
-          pager.replaceChildren(
-            el("span", { text: info.total + " order(s) · page " + info.page + " of " + Math.max(info.pages, 1) }),
-            el("div", { class: "button-row" }, [
-              el("button", { class: "btn btn-ghost btn-small", type: "button", disabled: !info.has_prev, text: "Previous", onclick: () => { state.page -= 1; load(); } }),
-              el("button", { class: "btn btn-ghost btn-small", type: "button", disabled: !info.has_next, text: "Next", onclick: () => { state.page += 1; load(); } })
-            ])
-          );
-        } catch (error) {
-          results.replaceChildren(P.errorNotice(error));
-        }
-      }
-
-      load();
     }
+  }
+
+  [payment,status].forEach(input => input.addEventListener("change", () => load(1)));
+  search.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => load(1), 300);
   });
+  document.getElementById("orders-pagination")?.addEventListener("click", event => {
+    if (event.target.id === "orders-prev" && page > 1) load(page - 1);
+    if (event.target.id === "orders-next" && page < pages) load(page + 1);
+  });
+  await load(1);
 })();

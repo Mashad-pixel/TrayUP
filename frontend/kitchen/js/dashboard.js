@@ -1,14 +1,13 @@
 (function () {
-  const demoMode = new URLSearchParams(window.location.search).get("demo") === "1";
-  const statuses = ["received","preparing","ready","collected"];
+  const demoMode = Boolean(window.trayMode?.isDemo?.()) || new URLSearchParams(window.location.search).get("demo") === "1";
+  const statuses = ["received", "preparing", "ready"];
   const demoQueue = {
     received: [
       {id:101,order_number:"TUP-4821",created_at:"10:24 AM",items:[{name:"Masala Dosa",quantity:2},{name:"Cold Coffee",quantity:1}]},
       {id:102,order_number:"TUP-4825",created_at:"10:31 AM",items:[{name:"Grilled Chicken Bowl",quantity:1}]}
     ],
     preparing:[{id:103,order_number:"TUP-4818",created_at:"10:11 AM",items:[{name:"Paneer Butter Masala",quantity:2}]}],
-    ready:[{id:104,order_number:"TUP-4809",created_at:"9:58 AM",items:[{name:"Cheese Chilli Sandwich",quantity:2},{name:"Mango Shake",quantity:2}]}],
-    collected:[{id:105,order_number:"TUP-4802",created_at:"9:40 AM",items:[{name:"Masala Dosa",quantity:1}] }]
+    ready:[{id:104,order_number:"TUP-4809",created_at:"9:58 AM",items:[{name:"Cheese Chilli Sandwich",quantity:2},{name:"Mango Shake",quantity:2}]}]
   };
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   function updateTime() {
@@ -25,35 +24,30 @@
     statuses.forEach(status => {
       const col = document.querySelector('[data-status="' + status + '"]');
       const heading = col.querySelector("h2");
-      col.textContent = ""; col.appendChild(heading);
-      const p = document.createElement("p");
-      p.className = "empty-state"; p.textContent = detail; col.appendChild(p);
+      col.replaceChildren(heading);
+      const p = document.createElement("p"); p.className = "empty-state"; p.textContent = detail; col.appendChild(p);
     });
   }
   function render(queue, readOnly) {
     const counts = statuses.map(s => Array.isArray(queue[s]) ? queue[s].length : 0);
     document.getElementById("summary").innerHTML =
       (readOnly ? '<div class="metric"><span>Mode</span><strong>Demo · read only</strong></div>' : "") +
-      [["New",counts[0]],["Preparing",counts[1]],["Ready",counts[2]],["Collected",counts[3]]]
+      [["New",counts[0]],["Preparing",counts[1]],["Ready for collection",counts[2]]]
         .map(([label,value]) => '<div class="metric"><span>' + label + '</span><strong>' + value + '</strong></div>').join("");
     statuses.forEach(status => {
       const col = document.querySelector('[data-status="' + status + '"]');
       const heading = col.querySelector("h2").outerHTML;
       const orders = Array.isArray(queue[status]) ? queue[status] : [];
       const cards = orders.map(order => {
-        const id = Number(order.id);
-        const safeId = Number.isInteger(id) && id > 0 ? String(id) : "";
-        const items = (order.items || []).map(item =>
-          "<li><span>" + Math.max(1,Number(item.quantity)||1) + " × " +
-          esc(item.item_name || item.name || item.menu_item_name || "Item") + "</span></li>"
-        ).join("");
+        const id = Number(order.id), safeId = Number.isInteger(id) && id > 0 ? String(id) : "";
+        const items = (order.items || []).map(item => "<li><span>" + Math.max(1,Number(item.quantity)||1) + " × " +
+          esc(item.item_name || item.name || item.menu_item_name || "Item") + "</span></li>").join("");
         const action = readOnly ? "" :
-          (status==="received" ? '<button class="btn btn-primary" data-next="preparing">Start preparing</button>' : "") +
-          (status==="preparing" ? '<button class="btn btn-primary" data-next="ready">Mark ready</button>' : "") +
-          (status==="ready" ? '<button class="btn btn-secondary" data-next="collected">Confirm collection</button>' : "");
-        return '<article class="order-ticket" data-order="' + safeId + '"><header><span>' +
-          esc(order.order_number || "Order") + "</span><span>" + esc(order.created_at || "") +
-          "</span></header><ul>" + items + "</ul>" + action + "</article>";
+          (status === "received" ? '<button class="btn btn-primary" data-next="preparing">Start preparing</button>' : "") +
+          (status === "preparing" ? '<button class="btn btn-primary" data-next="ready">Mark ready</button>' : "") +
+          (status === "ready" ? '<a class="btn btn-secondary" href="./scanner.html">Scan collection QR</a>' : "");
+        return '<article class="order-ticket" data-order="' + safeId + '"><header><span>' + esc(order.order_number || "Order") +
+          "</span><span>" + esc(order.created_at || "") + "</span></header><ul>" + items + "</ul>" + action + "</article>";
       }).join("");
       col.innerHTML = heading + (cards || '<div class="empty-state" style="background:transparent">No orders</div>');
     });
@@ -83,8 +77,10 @@
     }
   });
   document.getElementById("logout").addEventListener("click", async () => {
-    try { await trayAuth.logout(); } catch (_) {}
-    window.location.href = "./login.html";
+    const button = document.getElementById("logout"); button.disabled = true;
+    if (window.trayMode?.isDemo?.()) { window.trayMode.exitDemo(); window.location.href = "./login.html"; return; }
+    try { await trayAuth.logout(); window.location.href = "./login.html"; }
+    catch (_) { button.disabled = false; trayNotify("Could not sign out. Check your connection and try again."); }
   });
   load();
   if (!demoMode) {

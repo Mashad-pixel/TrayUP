@@ -173,15 +173,19 @@
   $('#f-login').addEventListener('submit', async e => {
     e.preventDefault(); if (lbusy) return; msg.textContent = '';
     const id = parseId(email.value);
-    if (!id) { msg.textContent = 'Enter a valid email address or phone number.'; email.focus(); return; }
+    if (!id) { msg.textContent = 'Enter your account email address.'; email.focus(); return; }
     if (id.type !== 'email') { msg.textContent = 'Use your account email to sign in.'; email.focus(); return; }
     if (pass.value.length < 8) { msg.textContent = 'Use at least 8 characters for your password.'; pass.focus(); return; }
     lbusy = true; const b = e.submitter; if (b) b.disabled = true;
     try {
       const response = await trayAuth.login(id.value, pass.value);
       if (String(response?.data?.role || '').toUpperCase() !== 'STUDENT') {
-        await trayAuth.logout();
-        msg.textContent = 'This is a staff account. Use the staff sign-in page.';
+        try {
+          await trayAuth.logout();
+          msg.textContent = 'This is a staff account. Use the staff sign-in page.';
+        } catch (_) {
+          msg.textContent = 'This is a staff account. Sign out failed; close this page and use the staff sign-in page.';
+        }
         return;
       }
       msg.textContent = 'Signed in as ' + response.data.name + '.';
@@ -254,7 +258,7 @@
     if (p.length >= 8) s++; if (p.length >= 12) s++; if (/[a-z]/.test(p) && /[A-Z]/.test(p)) s++; if (/\d/.test(p)) s++; if (/[^\w\s]/.test(p)) s++;
     const b = $('#bar'); b.style.width = (p ? Math.max(15, s * 20) : 0) + '%'; b.style.background = s < 3 ? '#f08a6c' : s < 4 ? '#e8b77a' : '#9fd8a8'; });
   $('#r-id').addEventListener('input', e => { const v = e.target.value.trim(); if (!v) return setH('id', '');
-    const p = parseId(v); setH('id', p ? (p.type === 'email' ? 'Email detected. We’ll send a verification code.' : 'Mobile number detected. We’ll send an SMS code.') : '', p ? 'ok' : ''); });
+    const p = parseId(v); setH('id', p ? (p.type === 'email' ? 'Email address detected.' : 'Use an email address to create an account.') : '', p && p.type === 'email' ? 'ok' : 'e'); });
   [['r-terms', 'c-terms'], ['r-priv', 'c-priv']].forEach(([i, c]) => $('#' + i).addEventListener('change', () => $('#' + c).classList.remove('bad')));
 
   function validate() {
@@ -263,7 +267,7 @@
     [n, i, p, p2].forEach(x => bad(x, false)); setH('name', ''); setH('pw2', '');
     const nm = n.value.trim().replace(/\s+/g, ' ');
     if (!nm) fail(n, 'name', 'Please tell us your name.'); else if (nm.length < 2 || nm.length > 80 || /[<>{}\d]/.test(nm)) fail(n, 'name', 'Please enter your real name (letters only).');
-    if (!i.value.trim()) fail(i, 'id', 'Enter an email address or mobile number.'); else if (!parseId(i.value)) fail(i, 'id', 'That isn’t a valid email or 10-digit Indian mobile number.');
+    if (!i.value.trim()) fail(i, 'id', 'Enter an email address.'); else if (!parseId(i.value) || parseId(i.value).type !== 'email') fail(i, 'id', 'Use a valid email address.');
     if (p.value.length < 8 || !/[A-Za-z]/.test(p.value) || !/\d/.test(p.value)) fail(p, 'pw', 'Use 8+ characters with at least one letter and one number.'); else setH('pw', 'Looks good.', 'ok');
     if (!p2.value) fail(p2, 'pw2', 'Please confirm your password.'); else if (p2.value !== p.value) fail(p2, 'pw2', 'Passwords don’t match yet.');
     let consent = true; [['r-terms', 'c-terms'], ['r-priv', 'c-priv']].forEach(([a, c]) => { const b = !$('#' + a).checked; $('#' + c).classList.toggle('bad', b); if (b) { consent = false; ok = false; } });
@@ -300,7 +304,7 @@
 
   // Forgot password
   E('f-forgot').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const m = E('fg-msg'); m.textContent = '';
-    const id = parseId(E('fg-id').value); if (!id) { m.textContent = 'Enter a valid email address or 10-digit Indian mobile number.'; return shake('f-forgot'); }
+    const id = parseId(E('fg-id').value); if (!id || id.type !== 'email') { m.textContent = 'Enter the email address registered to your account.'; return shake('f-forgot'); }
     const b = E('f-forgot').querySelector('.btn-primary'); busy = true; load(b, true);
     const r = await post('/api/forgot/start', { identifier: id.value }); busy = false; load(b, false);
     if (r.error) { m.textContent = r.error; return; } startVerify('forgot', id); });
@@ -342,7 +346,7 @@
   // Backup code
   E('f-code').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const m = E('rc-msg'); m.textContent = '';
     const id = parseId(E('rc-id').value), code = E('rc-code').value.trim();
-    if (!id || code.length < 10) { m.textContent = 'Enter your email or mobile number and your full recovery code.'; return shake('f-code'); }
+    if (!id || id.type !== 'email' || code.length < 10) { m.textContent = 'Enter your registered email address and your full recovery code.'; return shake('f-code'); }
     const b = E('f-code').querySelector('.btn-primary'); busy = true; load(b, true);
     const r = await post('/api/recovery/code', { identifier: id.value, code }); busy = false; load(b, false);
     if (r.error) { m.textContent = r.error; return; } resetTok = r.resetToken; goView('v-newpw'); });

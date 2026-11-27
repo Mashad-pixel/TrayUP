@@ -170,7 +170,10 @@
       trayNotify("None of these dishes are available right now.");
       return;
     }
-    trayStorage.set("trayup-cart", cart);
+    if (!trayStorage.set("trayup-cart", cart)) {
+      trayNotify("Your browser blocked cart storage. Enable site storage and try again.");
+      return;
+    }
     trayNotify(skipped ? `${skipped} dish${skipped === 1 ? "" : "es"} unavailable and not added.` : "Items added to your cart");
     window.location.href = "../student/cart.html";
   }

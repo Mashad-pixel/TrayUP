@@ -1,125 +1,179 @@
-// Menu categories: create, rename (moves its items), and delete when no item uses it.
+// Menu categories. Items refer to a category by name, so renaming moves them on the server,
+// and a category that still has items cannot be deleted.
 (function () {
   "use strict";
-  const P = window.adminPanel;
-  const el = P.el;
 
-  function renameDialog(category, onDone) {
-    const name = P.field({ label: "Category name", name: "name", value: category.name, maxLength: 60, required: true, hint: "Menu items in this category move to the new name." });
-    const error = el("div", { class: "field-error", role: "alert", hidden: true });
-    const submit = el("button", { class: "btn btn-primary", type: "submit", text: "Save name" });
-    const form = el("form", { class: "stack", novalidate: true }, [name.node, error]);
-    const dialog = P.modal({
-      title: "Rename " + category.name,
-      body: form,
-      footer: el("div", { class: "button-row" }, [el("button", { class: "btn btn-ghost", type: "button", text: "Cancel", onclick: () => dialog.close() }), submit])
-    });
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      submit.disabled = true;
-      try {
-        await trayApi.patch("/admin/categories/" + category.id, { name: name.input.value });
-        dialog.close();
-        P.toast("Category renamed.", "success");
-        onDone();
-      } catch (err) {
-        const details = P.fieldDetails(err);
-        P.setFieldErrors([name], details);
-        if (!details.name) { error.textContent = P.describeError(err).text; error.hidden = false; }
-        submit.disabled = false;
-      }
-    });
-    name.input.focus();
-    name.input.select();
+  const ui = window.trayUI;
+  const root = document.querySelector(".admin-content");
+  if (window.trayMode.isDemo()) {
+    ui.demoOnly(root, "Categories", "Categories are not loaded in demo mode.");
+    return;
   }
 
-  async function remove(category, onDone) {
-    const confirmed = await P.confirmAction({
-      title: "Delete " + category.name + "?",
-      message: "The category will be removed. This cannot be undone.",
-      confirmLabel: "Delete category",
-      danger: true
-    });
-    if (!confirmed) return;
+  let categories = [];
+  let renaming = null;   // id of the row being renamed
+  let addErrors = {};
+  let rowErrors = {};    // id -> message
+  let notice = null;
+
+  function addForm() {
+    const name = ui.el("input", { name: "name", required: true, maxlength: 60, placeholder: "e.g. Hot Drinks" });
+    const order = ui.el("input", { name: "sort_order", type: "number", min: 0, max: 10000, value: String(nextOrder()) });
+    return ui.el("form", { id: "add-form", class: "card", style: "padding:16px;margin-top:18px" }, [
+      ui.el("div", { class: "ui-form" }, [
+        ui.el("label", { class: "ui-field" }, ["Name", name, addErrors.name ? ui.el("span", { class: "ui-error", text: addErrors.name }) : null]),
+        ui.el("label", { class: "ui-field" }, ["Display order", order, ui.el("span", { class: "ui-hint", text: "Lower numbers appear first on the menu." })]),
+        ui.el("button", { class: "btn btn-primary", type: "submit", text: "Add category" })
+      ]),
+      addErrors.unknown_fields ? ui.el("div", { class: "ui-error", text: addErrors.unknown_fields }) : null
+    ]);
+  }
+
+  function nextOrder() {
+    return categories.reduce((max, c) => Math.max(max, c.sort_order), -10) + 10;
+  }
+
+  function row(category) {
+    const cells = [];
+    if (renaming === category.id) {
+      cells.push(ui.el("td", null, [
+        ui.el("form", { class: "ui-row-actions", dataset: { rename: category.id } }, [
+          ui.el("input", { name: "name", value: category.name, maxlength: 60, required: true, style: "height:36px;border:1px solid var(--line);border-radius:6px;padding:6px 8px" }),
+          ui.el("button", { class: "btn btn-primary", type: "submit", text: "Save" }),
+          ui.el("button", { class: "btn btn-secondary", type: "button", dataset: { cancel: category.id }, text: "Cancel" })
+        ]),
+        rowErrors[category.id] ? ui.el("div", { class: "ui-error", text: rowErrors[category.id] }) : null
+      ]));
+    } else {
+      cells.push(ui.el("td", { text: category.name }));
+    }
+    cells.push(ui.el("td", { class: "ui-num", text: String(category.item_count) }));
+    cells.push(ui.el("td", null, [
+      ui.el("input", { type: "number", min: 0, max: 10000, value: String(category.sort_order), dataset: { order: category.id }, style: "width:90px;height:36px;border:1px solid var(--line);border-radius:6px;padding:6px 8px", "aria-label": `Display order for ${category.name}` })
+    ]));
+    cells.push(ui.el("td", null, [ui.el("div", { class: "ui-row-actions" }, [
+      renaming === category.id ? null : ui.el("button", { class: "btn btn-secondary", type: "button", dataset: { rename: category.id }, text: "Rename" }),
+      ui.el("button", {
+        class: "btn btn-secondary", type: "button", dataset: { remove: category.id },
+        disabled: category.item_count > 0,
+        title: category.item_count > 0 ? "Move its items to another category first" : "Delete this category",
+        text: "Delete"
+      })
+    ])]));
+    return ui.el("tr", null, cells);
+  }
+
+  function render() {
+    root.replaceChildren(
+      ui.header("Menu categories"),
+      ui.el("p", { class: "ui-muted", style: "margin-top:10px", text: "Categories group items on the student menu. Renaming a category moves its items with it. A category with items cannot be deleted until they are moved." }),
+      notice,
+      addForm(),
+      ui.el("div", { class: "card table-card", style: "margin-top:18px;overflow-x:auto" }, [
+        ui.el("table", { class: "data-table" }, [
+          ui.el("thead", null, [ui.el("tr", null, ["Category", "Items", "Display order", ""].map((t) => ui.el("th", { text: t })))]),
+          ui.el("tbody", null, categories.length
+            ? categories.map(row)
+            : [ui.el("tr", null, [ui.el("td", { colspan: 4, class: "ui-muted", text: "No categories yet." })])])
+        ])
+      ])
+    );
+  }
+
+  function say(text, tone) {
+    notice = ui.notice(text, tone);
+    render();
+    setTimeout(() => { notice = null; }, 4000);
+  }
+
+  async function reload() {
     try {
-      await trayApi.del("/admin/categories/" + category.id);
-      P.toast("Category deleted.", "success");
-      onDone();
+      const response = await trayApi.get("/admin/categories");
+      categories = response.categories || [];
+      render();
     } catch (error) {
-      P.toast(P.describeError(error).text, "danger");
+      root.replaceChildren(ui.header("Menu categories"), ui.errorNotice(error));
     }
   }
 
-  P.start({
-    page: "categories",
-    title: "Categories",
-    run: ({ content }) => {
-      const createName = P.field({ label: "New category", name: "name", placeholder: "e.g. Beverages", maxLength: 60, required: true, wide: false });
-      const createError = el("div", { class: "field-error", role: "alert", hidden: true });
-      const createForm = el("form", { class: "toolbar", novalidate: true }, [
-        createName.node,
-        el("button", { class: "btn btn-primary", type: "submit", text: "Add category" })
-      ]);
-      const listBox = el("div");
+  async function add(form) {
+    addErrors = {};
+    const data = new FormData(form);
+    const body = { name: String(data.get("name") || ""), sort_order: Number(data.get("sort_order") || 0) };
+    try {
+      await trayApi.post("/admin/categories", body);
+      say("Category added", "ok");
+      await reload();
+    } catch (error) {
+      addErrors = ui.fieldErrors(error);
+      if (!Object.keys(addErrors).length) addErrors = { unknown_fields: ui.describeError(error).text };
+      render();
+    }
+  }
 
-      content.replaceChildren(
-        P.pageHead("Categories", "Groups that menu items are sorted into. Each item must belong to one category."),
-        P.card({ body: [createForm, createError] }),
-        el("div", { style: "margin-top:18px" }, [listBox])
-      );
+  async function saveRename(form) {
+    const id = Number(form.dataset.rename);
+    rowErrors = {};
+    try {
+      await trayApi.patch(`/admin/categories/${id}`, { name: String(new FormData(form).get("name") || "") });
+      renaming = null;
+      say("Category renamed. Its items moved with it.", "ok");
+      await reload();
+    } catch (error) {
+      rowErrors[id] = Object.values(ui.fieldErrors(error))[0] || ui.describeError(error).text;
+      render();
+    }
+  }
 
-      createForm.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        createError.hidden = true;
-        const value = createName.input.value.trim();
-        if (!value) { createError.textContent = "Enter a name for the category."; createError.hidden = false; return; }
-        const button = createForm.querySelector("button");
-        button.disabled = true;
-        try {
-          await trayApi.post("/admin/categories", { name: value });
-          createName.input.value = "";
-          P.toast("Category added.", "success");
-          load();
-        } catch (error) {
-          const details = P.fieldDetails(error);
-          createError.textContent = details.name || P.describeError(error).text;
-          createError.hidden = false;
-        } finally {
-          button.disabled = false;
-        }
-      });
+  async function saveOrder(input) {
+    const id = Number(input.dataset.order);
+    try {
+      await trayApi.patch(`/admin/categories/${id}`, { sort_order: Number(input.value) });
+      say("Display order saved", "ok");
+      await reload();
+    } catch (error) {
+      say(Object.values(ui.fieldErrors(error))[0] || ui.describeError(error).text, "danger");
+    }
+  }
 
-      async function load() {
-        listBox.replaceChildren(P.loading("Loading categories…"));
-        try {
-          const data = P.unwrap(await trayApi.get("/admin/categories"));
-          const categories = data.categories || [];
-          listBox.replaceChildren(P.card({
-            body: P.table(
-              [{ label: "Name" }, { label: "Menu items", numeric: true }, { label: "" }],
-              categories.map((category) => [
-                el("span", { class: "cell-strong", text: category.name }),
-                el("span", { class: "num", text: String(category.item_count) }),
-                el("div", { class: "button-row" }, [
-                  el("button", { class: "btn btn-ghost btn-small", type: "button", text: "Rename", "aria-label": "Rename " + category.name, onclick: () => renameDialog(category, load) }),
-                  el("button", {
-                    class: "btn btn-danger btn-small", type: "button", text: "Delete",
-                    disabled: category.item_count > 0,
-                    title: category.item_count > 0 ? "Move or delete its items first." : null,
-                    "aria-label": "Delete " + category.name,
-                    onclick: () => remove(category, load)
-                  })
-                ])
-              ]),
-              "No categories yet. Add one above."
-            )
-          }));
-        } catch (error) {
-          listBox.replaceChildren(P.errorNotice(error));
-        }
-      }
+  async function remove(id) {
+    const category = categories.find((c) => c.id === id);
+    if (!category || !window.confirm(`Delete the category "${category.name}"?`)) return;
+    try {
+      await trayApi.del(`/admin/categories/${id}`);
+      say("Category deleted", "ok");
+      await reload();
+    } catch (error) {
+      say(ui.describeError(error).text, "danger");
+    }
+  }
 
-      load();
+  root.addEventListener("click", (event) => {
+    const rename = event.target.closest("[data-rename]");
+    const cancel = event.target.closest("[data-cancel]");
+    const remover = event.target.closest("[data-remove]");
+    if (rename && rename.tagName === "BUTTON") {
+      renaming = Number(rename.dataset.rename);
+      rowErrors = {};
+      render();
+    } else if (cancel) {
+      renaming = null;
+      rowErrors = {};
+      render();
+    } else if (remover) {
+      remove(Number(remover.dataset.remove));
     }
   });
+
+  root.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (event.target.id === "add-form") add(event.target);
+    else if (event.target.dataset.rename) saveRename(event.target);
+  });
+
+  root.addEventListener("change", (event) => {
+    if (event.target.dataset && event.target.dataset.order) saveOrder(event.target);
+  });
+
+  reload();
 })();
