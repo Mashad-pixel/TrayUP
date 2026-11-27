@@ -229,7 +229,7 @@
         window.location.href = "./login.html";
         return;
       }
-      renderMessage("We couldn’t load your orders", "Check your connection and refresh the page.");
+      renderMessage("Could not load your orders", "Check your connection and refresh the page.");
     }
 
     // Track My Order links here with ?order_id=, so bring that order into view.

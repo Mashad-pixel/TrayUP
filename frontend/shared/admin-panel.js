@@ -492,29 +492,31 @@
     return config.run({ content, user, sidebar, app });
   }
 
-  const legacyNavigation = document.getElementById("admin-nav");
-  if (legacyNavigation) {
-    legacyNavigation.replaceChildren(...NAV.map((item) => {
-      const link = document.createElement("a");
-      link.href = `./${item.href}`;
-      link.textContent = item.label;
-      if (item.href === document.body.dataset.page) link.classList.add("active");
-      return link;
-    }));
-  }
+  if (typeof document !== "undefined") {
+    const legacyNavigation = document.getElementById("admin-nav");
+    if (legacyNavigation) {
+      legacyNavigation.replaceChildren(...NAV.map((item) => {
+        const link = document.createElement("a");
+        link.href = `./${item.href}`;
+        link.textContent = item.label;
+        if (item.href === document.body.dataset.page) link.classList.add("active");
+        return link;
+      }));
+    }
 
-  const legacyLogout = document.getElementById("logout");
-  if (legacyLogout) {
-    legacyLogout.addEventListener("click", async () => {
-      legacyLogout.disabled = true;
-      try {
-        await trayAuth.logout();
-        window.location.href = "./login.html";
-      } catch (_) {
-        legacyLogout.disabled = false;
-        window.trayNotify?.("Could not sign out. Check your connection and try again.");
-      }
-    });
+    const legacyLogout = document.getElementById("logout");
+    if (legacyLogout) {
+      legacyLogout.addEventListener("click", async () => {
+        legacyLogout.disabled = true;
+        try {
+          await trayAuth.logout();
+          window.location.href = "./login.html";
+        } catch (_) {
+          legacyLogout.disabled = false;
+          window.trayNotify?.("Could not sign out. Check your connection and try again.");
+        }
+      });
+    }
   }
 
   window.adminPanel = {

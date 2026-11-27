@@ -311,12 +311,16 @@ describe("admin orders", () => {
   });
 });
 
-describe("admin refunds (still not connected)", () => {
-  test("the refunds page shows no fake refunds in production", async () => {
-    const p = await load({ page: "admin/refunds.html", url: "/admin/refunds.html" });
+describe("admin refunds", () => {
+  test("the refunds page loads real payment and refund data", async () => {
+    const p = await load({ page: "admin/refunds.html", url: "/admin/refunds.html", routes: {
+      "GET /api/admin/payments": { status: 200, body: { success: true, data: { payments: [] } } },
+      "GET /api/admin/payments/refunds": { status: 200, body: { success: true, data: { refunds: [] } } },
+    } });
     await settle();
-    assert.match(text(p.doc), /Not connected to the live system yet/);
+    assert.match(text(p.doc), /Recent refunds/);
     assert.doesNotMatch(text(p.doc), /pay_demo_482|TUP-4792/);
+    assert.equal(count(p.calls, "GET", "/api/admin/payments"), 2);
   });
 });
 

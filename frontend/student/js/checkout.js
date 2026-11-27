@@ -226,6 +226,16 @@
     setBusy(true, "Placing order…");
     try {
       if (!serverOrder) {
+        const liveMenu = await window.trayCatalog.list();
+        const unavailable = cart.find((cartItem) => {
+          const item = liveMenu.find((entry) => entry.id === Number(cartItem.id));
+          return !item || !item.isAvailable || item.name !== cartItem.name || item.price !== Number(cartItem.price);
+        });
+        if (unavailable) {
+          trayNotify(`${unavailable.name} is not on the live menu or its price has changed. Update your cart and try again.`);
+          setBusy(false);
+          return;
+        }
         idempotencyKey = idempotencyKeyFor(details);
         const response = await trayApi.post("/orders", {
           items: cart.map((item) => ({ menu_item_id: item.id, quantity: item.qty })),

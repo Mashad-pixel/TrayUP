@@ -7,7 +7,7 @@
   function assertLiveMode() {
     if (window.trayMode?.isDemo?.()) {
       const error = new Error("Demo mode cannot access live canteen data.");
-      error.code = "DEMO_MODE_BLOCKED";
+      error.code = "DEMO_MODE";
       throw error;
     }
   }

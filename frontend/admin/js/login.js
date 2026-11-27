@@ -16,7 +16,6 @@
 
   function goToDashboard(role) {
     if (role === "ADMIN") window.location.href = "./dashboard.html";
-    else if (role === "KITCHEN") window.location.href = "../kitchen/dashboard.html";
     else trayNotify("This account does not have administrator access.");
   }
 
@@ -47,6 +46,13 @@
       const response = await trayAuth.login(email, password);
       const data = response?.data || {};
       pendingRole = data.role || null;
+      if (pendingRole !== "ADMIN") {
+        try { await trayAuth.logout(); } catch (_) {}
+        trayNotify(pendingRole === "KITCHEN"
+          ? "This kitchen account should sign in on the kitchen page."
+          : "This account does not have administrator access.");
+        return;
+      }
       if (data.mfa_required) {
         showOnly(mfaForm);
         mfaCode.focus();

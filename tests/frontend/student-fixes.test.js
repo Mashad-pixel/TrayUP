@@ -83,6 +83,9 @@ describe("unpaid order confirmation uses the online payment model", () => {
 
 describe("checkout keeps its idempotency key across a refresh", () => {
   const CART = JSON.stringify([{ id: 1, name: "Samosa", price: 15, qty: 2 }]);
+  const liveMenu = { "GET /api/menu": { status: 200, body: { items: [
+    { id: 1, name: "Samosa", price_paise: 1500, is_available: true },
+  ] } } };
   const fill = (p) => {
     p.doc.getElementById("name").value = "Asha";
     p.doc.getElementById("phone").value = "9876543210";
@@ -93,6 +96,7 @@ describe("checkout keeps its idempotency key across a refresh", () => {
   test("a dropped order request is retried after a refresh with the same key, and the key stays until payment completes", async () => {
     let attempt = 0;
     const routes = {
+      ...liveMenu,
       "POST /api/orders": () => {
         attempt += 1;
         if (attempt === 1) return new TypeError("Failed to fetch");
@@ -137,7 +141,7 @@ describe("checkout keeps its idempotency key across a refresh", () => {
     const p = await load({ page: "student/checkout.html", url: "/student/checkout.html",
       local: { "trayup-cart": CART },
       session: { "trayup-checkout-key": JSON.stringify({ key: "paid-order-key", fingerprint }) },
-      routes: { "POST /api/orders": { status: 200, body: { success: true, data: {
+      routes: { ...liveMenu, "POST /api/orders": { status: 200, body: { success: true, data: {
         id: 44, order_number: "TUP-1044", total_paise: 3000, order_status: "received", payment_status: "paid", items: []
       } } } } });
     await settle();
@@ -153,7 +157,7 @@ describe("checkout keeps its idempotency key across a refresh", () => {
   test("changing the cart gives the next order a new key", async () => {
     const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART },
       session: { "trayup-checkout-key": JSON.stringify({ key: "old-key", fingerprint: JSON.stringify([[9, 9]]) }) },
-      routes: { "POST /api/orders": new TypeError("Failed to fetch") } });
+      routes: { ...liveMenu, "POST /api/orders": new TypeError("Failed to fetch") } });
     await settle();
     fill(p);
     submit(p);

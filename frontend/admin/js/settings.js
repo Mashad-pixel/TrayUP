@@ -82,13 +82,21 @@
 
   async function load() {
     try {
-      [settings, account] = await Promise.all([
-        trayApi.get("/admin/canteen/settings"),
-        trayApi.get("/account").then((response) => response.data)
-      ]);
+      const response = await trayApi.get("/admin/canteen/settings");
+      settings = response.settings || response.data || response;
       render();
     } catch (error) {
       root.replaceChildren(ui.header("Canteen settings"), ui.errorNotice(error));
+      return;
+    }
+
+    try {
+      const response = await trayApi.get("/account");
+      account = response.data || response;
+      render();
+    } catch (error) {
+      notice = ui.errorNotice(error);
+      render();
     }
   }
 

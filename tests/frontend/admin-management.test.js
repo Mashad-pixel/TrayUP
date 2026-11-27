@@ -193,6 +193,7 @@ describe("staff accounts (production)", () => {
   test("creating an account sends the role and shows the server's duplicate-email message", async () => {
     const p = await load({ page: "admin/staff.html", url: "/admin/staff.html", routes: routes({ "POST /api/admin/staff": { status: 409, body: { success: false, message: "An account with this email already exists.", error: { code: "EMAIL_UNAVAILABLE" } } } }) });
     await settle(); await settle();
+    button(p.doc, "Add staff").click();
     p.doc.querySelector('#staff-form input[name="name"]').value = "New";
     p.doc.querySelector('#staff-form input[name="email"]').value = "ravi@x.com";
     p.doc.querySelector('#staff-form input[name="password"]').value = "KitchenPass1";

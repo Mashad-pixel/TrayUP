@@ -1,5 +1,6 @@
 (function () {
   const form = document.getElementById("login-form");
+  const demoEntry = document.getElementById("demo-entry");
   const submit = form.querySelector('button[type="submit"]');
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -14,10 +15,19 @@
       const role = response?.data?.role;
       if (role === "KITCHEN") window.location.href = "./dashboard.html";
       else if (role === "ADMIN") window.location.href = "../admin/dashboard.html";
-      else trayNotify("This account does not have kitchen access.");
+      else {
+        try { await trayAuth.logout(); } catch (_) {}
+        trayNotify("This account does not have kitchen access.");
+      }
     } catch (error) {
       // Failed authentication must never create a local demo role.
-      trayNotify(error.message || "Unable to sign in.");
+      trayNotify(typeof error.status === "number" ? error.message : "Could not reach the server. Check your connection and try again.");
     } finally { submit.disabled = false; }
   });
+
+  if (demoEntry) demoEntry.addEventListener("click", () => {
+    window.trayMode.enterDemo();
+    window.location.href = "./dashboard.html";
+  });
+
 })();

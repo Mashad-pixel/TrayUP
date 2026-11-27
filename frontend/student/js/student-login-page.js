@@ -304,7 +304,7 @@
 
   // Forgot password
   E('f-forgot').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const m = E('fg-msg'); m.textContent = '';
-    const id = parseId(E('fg-id').value); if (!id || id.type !== 'email') { m.textContent = 'Enter the email address registered to your account.'; return shake('f-forgot'); }
+    const id = parseId(E('fg-id').value); if (!id || id.type !== 'email') { m.textContent = "Mobile number recovery isn't available yet. Use your registered email address."; return shake('f-forgot'); }
     const b = E('f-forgot').querySelector('.btn-primary'); busy = true; load(b, true);
     const r = await post('/api/forgot/start', { identifier: id.value }); busy = false; load(b, false);
     if (r.error) { m.textContent = r.error; return; } startVerify('forgot', id); });

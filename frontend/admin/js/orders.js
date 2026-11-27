@@ -13,7 +13,17 @@
       body.innerHTML = `<tr><td colspan="5">${esc(loadError)}</td></tr>`;
       return;
     }
-    body.innerHTML = orders.length ? orders.map(order => {
+    const query = search.value.trim().toLowerCase();
+    const filtered = orders.filter((order) => {
+      const orderStatus = String(order.order_status || "").toLowerCase();
+      const paymentStatus = String(order.payment_status || "").toLowerCase();
+      const student = String(order.student?.name || "").toLowerCase();
+      const identifier = String(order.order_number || order.id || "").toLowerCase();
+      return (!query || student.includes(query) || identifier.includes(query)) &&
+        (!status.value || orderStatus === status.value) &&
+        (!payment.value || paymentStatus === payment.value);
+    });
+    body.innerHTML = filtered.length ? filtered.map(order => {
       const student = order.student && order.student.name;
       const amount = Number(order.total_paise || 0) / 100;
       return `<tr><td><strong>${esc(order.order_number || order.id)}</strong></td><td>${esc(student || "Student")}</td>` +
@@ -53,7 +63,9 @@
       currentOrders = Array.isArray(data.orders) ? data.orders : [];
     } catch (error) {
       currentOrders = [];
-      loadError = error.status===401 ? "Please sign in to view administrator orders." : error.status===403 ? "Administrator access is required." : error.message || "Unable to load orders. Please retry.";
+      loadError = error.status === 401 ? "Please sign in to view administrator orders." :
+        error.status === 403 ? "Administrator access is required." :
+        `Could not load orders: ${error.message || "Please retry."}`;
       const pager = document.getElementById("orders-pagination");
       if (pager) pager.replaceChildren();
     } finally {
@@ -70,6 +82,7 @@
 
   [payment,status].forEach(input => input.addEventListener("change", () => load(1)));
   search.addEventListener("input", () => {
+    render();
     clearTimeout(timer);
     timer = setTimeout(() => load(1), 300);
   });

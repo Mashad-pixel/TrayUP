@@ -19,6 +19,8 @@
   }
 
   function errorText(error) {
+    if (error && error.code === "DEMO_MODE") return error.message;
+    if (window.trayUI) return window.trayUI.describeError(error).text;
     if (error && typeof error.status !== "number") return "Could not reach the server. Nothing was changed.";
     return (error && error.message) || "Something went wrong. Nothing was changed.";
   }
@@ -199,7 +201,7 @@
 
   async function reload() {
     const [list, who] = await Promise.all([trayApi.get("/admin/staff"), trayAuth.currentUser()]);
-    staff = (list.data && list.data.staff) || [];
+    staff = list.staff || list.data?.staff || [];
     me = who.data || null;
     render();
   }

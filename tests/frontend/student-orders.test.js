@@ -3,7 +3,7 @@
 const { test, describe, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
-const { loadPage, settle, text, wait } = require("./harness");
+const { loadPage, settle, text } = require("./harness");
 
 const ROOT = process.env.FRONTEND_ROOT || path.resolve(__dirname, "../../frontend");
 const open = [];
@@ -80,34 +80,29 @@ describe("confirmation shows the order the server saved", () => {
   });
 });
 
-describe("the animated confirmation buttons do what they say", () => {
+describe("paid confirmation uses the server order details", () => {
   const animated = (query) => load({
     page: "student/order-placed-animation.html",
     url: `/student/order-placed-animation.html?receipt=TU2611270001${query || ""}`,
-    routes: {},
+    routes: { "GET /api/orders/7": orderResponse({ ...SERVER_ORDER, payment_status: "paid" }) },
   });
 
-  test("Track My Order shows a message and then leaves for the order's tracking page", async () => {
+  test("Track My Order links to the order's tracking page", async () => {
     const p = await animated("&order_id=7");
-    p.doc.getElementById("trackBtn").click();
-    await wait(600);
-
-    assert.match(text(p.doc), /Opening your orders/);
-    assert.ok(p.navigations.length > 0, "the page navigates away");
+    await settle(); await settle();
+    assert.equal(p.doc.getElementById("track-link").getAttribute("href"), "./tracking.html?order_id=7");
   });
 
-  test("Continue Shopping leaves for the menu", async () => {
+  test("Continue Shopping links to the menu", async () => {
     const p = await animated("&order_id=7");
-    p.doc.getElementById("contBtn").click();
-    await wait(600);
-
-    assert.match(text(p.doc), /Taking you back to the menu/);
-    assert.ok(p.navigations.length > 0, "the page navigates away");
+    const link = [...p.doc.querySelectorAll("a")].find((entry) => entry.textContent.trim() === "Continue shopping");
+    assert.equal(link.getAttribute("href"), "../index.html");
   });
 
-  test("the receipt number on the page is the one from the link", async () => {
+  test("the receipt number on the page comes from the server", async () => {
     const p = await animated("&order_id=7");
-    assert.equal(p.doc.getElementById("copy").textContent, "TU2611270001");
+    await settle(); await settle();
+    assert.equal(p.doc.getElementById("receipt").textContent, SERVER_ORDER.order_number);
   });
 });
 
@@ -126,6 +121,9 @@ describe("tracking opens the order it was linked to", () => {
 
 describe("checkout sends the typed details to the server", () => {
   const CART = JSON.stringify([{ id: 1, name: "Samosa", price: 10, qty: 2 }]);
+  const liveMenu = { "GET /api/menu": { status: 200, body: { items: [
+    { id: 1, name: "Samosa", price_paise: 1000, is_available: true },
+  ] } } };
   const fill = (p, name = "Asha", instructions = "Less sugar") => {
     p.doc.getElementById("name").value = name;
     p.doc.getElementById("phone").value = "9876543210";
@@ -139,7 +137,7 @@ describe("checkout sends the typed details to the server", () => {
   };
 
   test("the order request carries the name, phone and instructions", async () => {
-    const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { "POST /api/orders": created } });
+    const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { ...liveMenu, "POST /api/orders": created } });
     await settle();
     fill(p);
     mockSuccessfulPayment(p);
@@ -154,7 +152,7 @@ describe("checkout sends the typed details to the server", () => {
   });
 
   test("a verified online payment goes to its confirmation page by id, and the cart is cleared", async () => {
-    const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { "POST /api/orders": created } });
+    const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { ...liveMenu, "POST /api/orders": created } });
     await settle();
     fill(p);
     mockSuccessfulPayment(p);
@@ -167,7 +165,7 @@ describe("checkout sends the typed details to the server", () => {
   });
 
   test("cash payment is not offered and cannot create an order", async () => {
-    const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { "POST /api/orders": created } });
+    const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { ...liveMenu, "POST /api/orders": created } });
     await settle();
     fill(p);
     assert.equal(p.doc.querySelector('input[name="payment_method"][value="cash"]'), null);
@@ -183,6 +181,7 @@ describe("checkout sends the typed details to the server", () => {
   test("changing the typed name gives the next attempt a new idempotency key", async () => {
     let attempt = 0;
     const routes = {
+      ...liveMenu,
       "POST /api/orders": () => {
         attempt += 1;
         return attempt === 1 ? new TypeError("Failed to fetch") : created;
@@ -209,16 +208,23 @@ describe("checkout sends the typed details to the server", () => {
 
 describe("a paid-out or expired order is not reused under its key", () => {
   const CART = JSON.stringify([{ id: 1, name: "Samosa", price: 10, qty: 2 }]);
+  const liveMenu = { "GET /api/menu": { status: 200, body: { items: [
+    { id: 1, name: "Samosa", price_paise: 1000, is_available: true },
+  ] } } };
   const fill = (p) => {
     p.doc.getElementById("name").value = "Asha";
     p.doc.getElementById("phone").value = "9876543210";
   };
   const submit = (p) => p.doc.getElementById("checkout-form").dispatchEvent(new p.win.Event("submit", { cancelable: true, bubbles: true }));
   const orderPosts = (p) => p.calls.filter((c) => c.method === "POST" && c.path.endsWith("/api/orders"));
+  const mockSuccessfulPayment = (p) => {
+    p.win.trayPayment.pay = async () => ({ data: { payment_status: "paid", order_status: "received" } });
+  };
 
   test("after ORDER_CANCELLED the next submit sends a new key and creates a new order", async () => {
     let attempt = 0;
     const routes = {
+      ...liveMenu,
       "POST /api/orders": () => {
         attempt += 1;
         if (attempt === 1) {
