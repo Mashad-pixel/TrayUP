@@ -1,7 +1,7 @@
 """add administrator MFA fields and server-side user sessions
 
 Revision ID: 3c8d2e4f5a6b
-Revises: 1a2b3c4d5e6f
+Revises: 3c4d5e6f7081
 Create Date: 2026-11-25
 
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 revision = "3c8d2e4f5a6b"
-down_revision = "1a2b3c4d5e6f"
+down_revision = "3c4d5e6f7081"
 branch_labels = None
 depends_on = None
 

@@ -45,9 +45,22 @@ def _head():
     return head
 
 
-def _run_flask(args, url):
+def _migration_env(url):
+    """Environment for a migration subprocess.
+
+    The migrations are run in development mode with a local database. The production
+    configuration correctly refuses to start without a real secret key and shared rate-limit
+    storage, so it must not be the default here (CI sets neither).
+    """
     env = os.environ.copy()
     env["DATABASE_URL"] = url
+    env["FLASK_CONFIG"] = "development"
+    env["RATELIMIT_STORAGE_URI"] = "memory://"
+    return env
+
+
+def _run_flask(args, url):
+    env = _migration_env(url)
     completed = subprocess.run(
         [sys.executable, "-m", "flask", "--app", "run", *args],
         cwd=ROOT,
@@ -61,8 +74,7 @@ def _run_flask(args, url):
 
 
 def _run_python(script, url):
-    env = os.environ.copy()
-    env["DATABASE_URL"] = url
+    env = _migration_env(url)
     completed = subprocess.run(
         [sys.executable, "-c", script],
         cwd=ROOT,

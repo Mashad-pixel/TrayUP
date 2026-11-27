@@ -134,12 +134,15 @@ describe("checkout sends the typed details to the server", () => {
   const submit = (p) => p.doc.getElementById("checkout-form").dispatchEvent(new p.win.Event("submit", { cancelable: true, bubbles: true }));
   const orderPosts = (p) => p.calls.filter((c) => c.method === "POST" && c.path.endsWith("/api/orders"));
   const created = { status: 201, body: { success: true, message: "", data: { id: 7, order_number: "TU2611270001", total_paise: 2000, order_status: "pending_payment", payment_status: "pending", items: [] } } };
+  const mockSuccessfulPayment = (p) => {
+    p.win.trayPayment.pay = async () => ({ data: { payment_status: "paid", order_status: "received" } });
+  };
 
   test("the order request carries the name, phone and instructions", async () => {
     const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { "POST /api/orders": created } });
     await settle();
     fill(p);
-    p.doc.querySelector('input[name="payment_method"][value="cash"]').checked = true;
+    mockSuccessfulPayment(p);
     submit(p);
     await settle(); await settle();
 
@@ -150,17 +153,31 @@ describe("checkout sends the typed details to the server", () => {
     assert.deepEqual(body.items, [{ menu_item_id: 1, quantity: 2 }]);
   });
 
-  test("a cash order goes to its confirmation page by id, and nothing is saved in browser storage", async () => {
+  test("a verified online payment goes to its confirmation page by id, and the cart is cleared", async () => {
     const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { "POST /api/orders": created } });
     await settle();
     fill(p);
-    p.doc.querySelector('input[name="payment_method"][value="cash"]').checked = true;
+    mockSuccessfulPayment(p);
     submit(p);
     await settle(); await settle();
 
     assert.ok(p.navigations.length > 0, "the page moves on to the confirmation");
     assert.equal(p.win.localStorage.getItem("trayup-last-order"), null, "no copy of the order is stored in the browser");
     assert.equal(p.win.localStorage.getItem("trayup-cart"), null, "the cart is cleared");
+  });
+
+  test("cash payment is not offered and cannot create an order", async () => {
+    const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes: { "POST /api/orders": created } });
+    await settle();
+    fill(p);
+    assert.equal(p.doc.querySelector('input[name="payment_method"][value="cash"]'), null);
+    const online = p.doc.querySelector('input[name="payment_method"][value="razorpay"]');
+    online.checked = false;
+    const unsupported = p.doc.createElement("input");
+    unsupported.type = "radio"; unsupported.name = "payment_method"; unsupported.value = "cash"; unsupported.checked = true;
+    p.doc.getElementById("checkout-form").appendChild(unsupported);
+    submit(p); await settle();
+    assert.equal(orderPosts(p).length, 0);
   });
 
   test("changing the typed name gives the next attempt a new idempotency key", async () => {
@@ -182,6 +199,7 @@ describe("checkout sends the typed details to the server", () => {
       session: { "trayup-checkout-key": first.win.sessionStorage.getItem("trayup-checkout-key") }, routes });
     await settle();
     fill(second, "Ravi");
+    mockSuccessfulPayment(second);
     submit(second);
     await settle(); await settle();
 
@@ -212,12 +230,13 @@ describe("a paid-out or expired order is not reused under its key", () => {
     const p = await load({ page: "student/checkout.html", url: "/student/checkout.html", local: { "trayup-cart": CART }, routes });
     await settle();
     fill(p);
-    p.doc.querySelector('input[name="payment_method"][value="cash"]').checked = true;
+    mockSuccessfulPayment(p);
     submit(p);
     await settle(); await settle();
     const firstKey = orderPosts(p)[0].headers["Idempotency-Key"];
     assert.match(text(p.doc), /This order was cancelled/);
 
+    mockSuccessfulPayment(p);
     submit(p);
     await settle(); await settle();
     const secondKey = orderPosts(p)[1].headers["Idempotency-Key"];

@@ -3,6 +3,7 @@ import pytest
 from app.extensions import db
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.user import User, UserRole
+from tests.session_helpers import issue_test_session
 
 
 def make_user(email, name, role=UserRole.STUDENT):
@@ -33,6 +34,7 @@ def client_for_admin(app):
     with client.session_transaction() as sess:
         sess["_user_id"] = str(admin.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(admin)
     return client
 
 

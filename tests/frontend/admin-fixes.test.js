@@ -50,6 +50,41 @@ describe("orders page reads the server's field names", () => {
     assert.doesNotMatch(text(p.doc), /Aarav Shah|TUP-4825|Read-only demo data/);
     assert.equal(calls(p, "/api/admin/orders").length, 1, "the real list is requested");
   });
+
+  test("all backend order statuses, including pending payment, are filterable", async () => {
+    const p = await load({ page: "admin/orders.html", url: "/admin/orders.html", routes: ORDERS });
+    await settle(); await settle();
+    const filter = p.doc.getElementById("status-filter");
+    assert.ok([...filter.options].some((option) => option.value === "pending_payment"));
+    filter.value = "pending_payment";
+    filter.dispatchEvent(new p.win.Event("change", { bubbles: true }));
+    await settle(); await settle();
+    assert.ok(p.calls.some((call) => call.path.includes("order_status=pending_payment")));
+  });
+
+  test("a search typed during an in-flight request is queued instead of being dropped", async () => {
+    let releaseInitial;
+    let started;
+    const initialStarted = new Promise((resolve) => { started = resolve; });
+    const delayed = new Promise((resolve) => { releaseInitial = resolve; });
+    let requests = 0;
+    const p = await load({ page: "admin/orders.html", url: "/admin/orders.html", routes: {
+      "GET /api/admin/orders": async () => {
+        requests += 1;
+        if (requests === 1) { started(); return delayed; }
+        return { status: 200, body: { success: true, data: { orders: [], pagination: { pages: 1 } } } };
+      },
+    } });
+    await initialStarted;
+    const search = p.doc.getElementById("order-search");
+    search.value = "Meera";
+    search.dispatchEvent(new p.win.Event("input", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    releaseInitial({ status: 200, body: { success: true, data: { orders: [], pagination: { pages: 1 } } } });
+    await settle(); await settle();
+    assert.ok(p.calls.some((call) => call.path.includes("search=Meera")));
+    assert.equal(requests, 2);
+  });
 });
 
 describe("reports and overview use live data", () => {
@@ -130,12 +165,16 @@ describe("reports and overview use live data", () => {
   });
 });
 
-describe("categories page shows no invented data", () => {
-  test("categories shows no invented categories and saves nothing", async () => {
-    const p = await load({ page: "admin/categories.html", url: "/admin/categories.html", routes: ME });
+describe("categories page uses the persistent API", () => {
+  test("an empty category list shows no invented categories", async () => {
+    const p = await load({ page: "admin/categories.html", url: "/admin/categories.html", routes: {
+      ...ME,
+      "GET /api/admin/categories": { status: 200, body: { success: true, categories: [] } },
+    } });
     await settle();
-    assert.match(text(p.doc), /Not connected to the live system yet/);
+    assert.match(text(p.doc), /No categories yet/);
     assert.doesNotMatch(text(p.doc), /Breakfast|Desserts/);
+    assert.equal(p.calls.filter(c => c.path === "/api/admin/categories").length, 1);
     assert.equal(storageWrites(p), 0);
   });
 });

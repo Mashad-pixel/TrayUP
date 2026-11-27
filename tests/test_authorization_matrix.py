@@ -25,6 +25,7 @@ from werkzeug.security import generate_password_hash
 
 from app.extensions import db
 from app.models.user import User, UserRole
+from tests.session_helpers import issue_test_session
 from app.security.permissions import roles_required
 
 # Hashing once keeps the matrix fast. Every test still gets fresh rows.
@@ -49,6 +50,14 @@ MATRIX = [
     ("GET", "/api/csrf-token", PUBLIC),
     ("GET", "/api/menu", PUBLIC),
     ("GET", "/api/menu/popular", PUBLIC),  # paid-unit counts only; no student or revenue data
+    ("GET", "/api/menu/<int:item_id>", PUBLIC),
+    ("POST", "/api/auth/mfa/verify", PUBLIC),  # signs in from a pending-password state, not login_required
+    ("POST", "/api/forgot/start", PUBLIC),
+    ("POST", "/api/forgot/resend", PUBLIC),
+    ("POST", "/api/forgot/verify", PUBLIC),
+    ("POST", "/api/forgot/reset", PUBLIC),
+    ("POST", "/api/recovery/code", PUBLIC),
+    ("POST", "/api/recovery/request", PUBLIC),
     ("GET", "/api/canteen/status", PUBLIC),
     ("POST", "/api/auth/login", PUBLIC),
     ("POST", "/api/auth/register", PUBLIC),
@@ -56,6 +65,9 @@ MATRIX = [
     # Any logged-in user
     ("GET", "/api/auth/me", AUTH),
     ("POST", "/api/auth/logout", AUTH),
+    ("POST", "/api/auth/mfa/setup", AUTH),
+    ("POST", "/api/auth/mfa/confirm", AUTH),
+    ("POST", "/api/auth/recovery-codes", AUTH),
     # Students only
     ("GET", "/api/orders", STUDENT_ONLY),
     ("POST", "/api/orders", STUDENT_ONLY),
@@ -76,6 +88,7 @@ MATRIX = [
     ("GET", "/api/admin/menu", ADMIN_ONLY),
     ("POST", "/api/admin/menu", ADMIN_ONLY),
     ("PATCH", "/api/admin/menu/<int:item_id>", ADMIN_ONLY),
+    ("DELETE", "/api/admin/menu/<int:item_id>", ADMIN_ONLY),
     ("PATCH", "/api/admin/canteen/status", ADMIN_ONLY),
     ("GET", "/api/admin/firebase/status", ADMIN_ONLY),
     ("GET", "/api/admin/orders", ADMIN_ONLY),
@@ -89,6 +102,15 @@ MATRIX = [
     ("GET", "/api/admin/reports/categories", ADMIN_ONLY),
     ("GET", "/api/admin/reports/peak-hours", ADMIN_ONLY),
     ("GET", "/api/admin/reports/orders", ADMIN_ONLY),
+    ("GET", "/api/admin/payments", ADMIN_ONLY),
+    ("GET", "/api/admin/payments/refunds", ADMIN_ONLY),
+    ("GET", "/api/admin/categories", ADMIN_ONLY),
+    ("POST", "/api/admin/categories", ADMIN_ONLY),
+    ("PATCH", "/api/admin/categories/<int:category_id>", ADMIN_ONLY),
+    ("DELETE", "/api/admin/categories/<int:category_id>", ADMIN_ONLY),
+    ("GET", "/api/admin/canteen/settings", ADMIN_ONLY),
+    ("PATCH", "/api/admin/canteen/settings", ADMIN_ONLY),
+    ("GET", "/api/admin/recovery-requests", ADMIN_ONLY),
 ]
 
 MATRIX_KEYS = {(method, rule) for method, rule, _ in MATRIX}
@@ -129,9 +151,11 @@ def people(app):
 def _client_for(app, people, role):
     client = app.test_client()
     if role != ANON:
+        user = db.session.get(User, people[role])
         with client.session_transaction() as sess:
             sess["_user_id"] = str(people[role])
             sess["_fresh"] = True
+            sess["sid"] = issue_test_session(user)
     return client
 
 

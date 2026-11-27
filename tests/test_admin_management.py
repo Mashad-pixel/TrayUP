@@ -14,9 +14,10 @@ from app.models.order import Order, OrderStatus
 from app.models.payment import Payment
 from app.models.stock_reservation import ReservationStatus, StockReservation
 from app.models.user import User, UserRole
+from tests.session_helpers import issue_test_session
 from app.services.order_service import cancel_order
 from app.services.payment_service import _confirm_captured_payment, create_payment_order
-from presence_helpers import create_order_for, presence_headers_for
+from order_helpers import create_order_for
 
 
 def make_user(email, role, name="Test User", password="StrongPass123!"):
@@ -32,6 +33,7 @@ def logged_in(app, user):
     with client.session_transaction() as sess:
         sess["_user_id"] = str(user.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(user)
     return client
 
 
@@ -272,7 +274,7 @@ def test_deactivated_staff_session_stops_working(app, admin_client, kitchen):
 def test_administrator_cannot_change_their_own_access(admin_client, admin):
     demote = admin_client.patch(f"/api/admin/staff/{admin.id}", json={"role": "KITCHEN"})
     assert demote.status_code == 409
-    assert demote.get_json()["error"]["code"] == "SELF_CHANGE_NOT_ALLOWED"
+    assert demote.get_json()["error"]["code"] == "SELF_LOCKOUT"
 
     deactivate = admin_client.patch(f"/api/admin/staff/{admin.id}", json={"is_active": False})
     assert deactivate.status_code == 409

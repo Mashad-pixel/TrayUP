@@ -1,5 +1,6 @@
 import pytest
 
+from tests.session_helpers import issue_test_session
 from app.extensions import db
 from app.models.user import User, UserRole
 
@@ -19,6 +20,7 @@ def client_for(app, user):
     with client.session_transaction() as sess:
         sess["_user_id"] = str(user.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(user)
     return client
 
 

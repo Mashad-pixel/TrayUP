@@ -1,5 +1,5 @@
-// Frontend behaviour for the pages changed in this round: canteen ordering switch, staff accounts,
-// and password recovery on the student sign-in page. Runs in jsdom with a scripted API.
+// Frontend behaviour for staff accounts and student password recovery.
+// Canteen name, hours and ordering settings are covered in admin-management.test.js.
 const { test, describe, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
@@ -13,55 +13,6 @@ const submit = (p, selector) => p.doc.querySelector(selector).dispatchEvent(new 
 const click = (p, selector) => p.doc.querySelector(selector).click();
 const calls = (p, method, fragment) => p.calls.filter((c) => c.method === method && c.path.includes(fragment));
 const storageWrites = (p) => p.win.localStorage.length + p.win.sessionStorage.length;
-
-// ---------- Canteen settings ----------
-
-const ORDERS_OPEN = { "GET /api/canteen/status": { status: 200, body: { is_accepting_orders: true, message: null } } };
-
-describe("canteen ordering switch", () => {
-  test("shows the server's status and no invented name or hours fields", async () => {
-    const p = await load({ page: "admin/settings.html", url: "/admin/settings.html", routes: ORDERS_OPEN });
-    await settle();
-    assert.match(text(p.doc), /Open\. Students can place orders\./);
-    assert.equal(p.doc.querySelector('input[name="canteen_name"]'), null);
-    assert.equal(p.doc.querySelector('input[type="time"]'), null);
-    assert.match(text(p.doc), /not stored in the system yet/);
-  });
-
-  test("stopping orders sends the switch and the message, then reloads the status", async () => {
-    const p = await load({ page: "admin/settings.html", url: "/admin/settings.html", routes: {
-      ...ORDERS_OPEN,
-      "PATCH /api/admin/canteen/status": { status: 200, body: { is_accepting_orders: false, message: "Exams" } },
-    } });
-    await settle();
-    p.doc.querySelector('textarea[name="closed_message"]').value = "Exams";
-    click(p, "#toggle-ordering");
-    await settle(); await settle();
-    const patch = calls(p, "PATCH", "/api/admin/canteen/status")[0];
-    assert.deepEqual(patch.body, { is_accepting_orders: false, closed_message: "Exams" });
-    assert.ok(calls(p, "GET", "/api/canteen/status").length >= 2, "status is reloaded after the change");
-  });
-
-  test("a refused change shows the reason and does not claim success", async () => {
-    const p = await load({ page: "admin/settings.html", url: "/admin/settings.html", routes: {
-      ...ORDERS_OPEN,
-      "PATCH /api/admin/canteen/status": { status: 400, body: { success: false, message: "Validation failed.", details: { closed_message: "Must be at most 200 characters." } } },
-    } });
-    await settle();
-    click(p, "#toggle-ordering");
-    await settle(); await settle();
-    assert.match(text(p.doc), /Must be at most 200 characters\./);
-    assert.doesNotMatch(text(p.doc), /Ordering is closed for students/);
-  });
-
-  test("nothing is written to the browser's storage", async () => {
-    const p = await load({ page: "admin/settings.html", url: "/admin/settings.html", routes: ORDERS_OPEN });
-    await settle();
-    click(p, "#toggle-ordering");
-    await settle();
-    assert.equal(storageWrites(p), 0);
-  });
-});
 
 // ---------- Staff accounts ----------
 

@@ -1,6 +1,7 @@
 """Admin menu deletion and category management."""
 import pytest
 
+from tests.session_helpers import issue_test_session
 from app.extensions import db
 from app.models.menu import MenuItem
 from app.models.menu_category import MenuCategory
@@ -18,6 +19,7 @@ def _client_for_role(app, role, email):
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
+        session["sid"] = issue_test_session(user)
     return client
 
 
@@ -137,7 +139,7 @@ def test_category_names_are_unique_ignoring_case(admin_client, categories, name)
     response = admin_client.post("/api/admin/categories", json={"name": name})
 
     assert response.status_code == 409
-    assert response.get_json()["error"]["code"] == "CATEGORY_EXISTS"
+    assert response.get_json()["error"]["code"] == "CATEGORY_NAME_TAKEN"
 
 
 @pytest.mark.parametrize("payload", [{}, {"name": ""}, {"name": "   "}, {"name": 5}, {"name": "x" * 61}])
@@ -175,7 +177,7 @@ def test_renaming_to_an_existing_name_is_refused(admin_client, categories):
     )
 
     assert response.status_code == 409
-    assert response.get_json()["error"]["code"] == "CATEGORY_EXISTS"
+    assert response.get_json()["error"]["code"] == "CATEGORY_NAME_TAKEN"
 
 
 def test_renaming_to_the_same_name_is_allowed(admin_client, categories):
