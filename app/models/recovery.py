@@ -61,3 +61,41 @@ class RecoveryRequest(db.Model):
     extra = db.Column(db.String(1000), nullable=False, default="")
     status = db.Column(db.String(20), nullable=False, default="received")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class PasswordRecoveryChallenge(db.Model):
+    """Email-code challenge and its short-lived password-reset grant."""
+
+    __tablename__ = "password_recovery_challenges"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    code_hash = db.Column(db.String(64), nullable=False)
+    attempts = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    last_sent_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    code_consumed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    reset_token_hash = db.Column(db.String(64), nullable=True, index=True)
+    reset_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+
+class AccountRecoveryRequest(db.Model):
+    """Manual account-recovery request awaiting staff review."""
+
+    __tablename__ = "account_recovery_requests"
+    __table_args__ = (db.UniqueConstraint("ref", name="uq_account_recovery_requests_ref"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    ref = db.Column(db.String(20), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    identifier = db.Column(db.String(120), nullable=False)
+    contact_email = db.Column(db.String(120), nullable=False)
+    created_estimate = db.Column(db.String(60), nullable=False, default="")
+    last_login_estimate = db.Column(db.String(60), nullable=False, default="")
+    reason = db.Column(db.String(1000), nullable=False)
+    extra = db.Column(db.String(1000), nullable=False, default="")
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)

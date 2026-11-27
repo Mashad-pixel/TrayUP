@@ -12,7 +12,14 @@ from app.models.payment_attempt import AttemptStatus, PaymentAttempt
 from app.models.webhook_event import WebhookEvent, WebhookStatus
 from app.models.stock_reservation import ReservationStatus, StockReservation
 from app.models.refund import Refund, RefundStatus
-from app.models.recovery import OtpChallenge, PasswordResetToken, RecoveryCode, RecoveryRequest
+from app.models.recovery import (
+    AccountRecoveryRequest,
+    OtpChallenge,
+    PasswordRecoveryChallenge,
+    PasswordResetToken,
+    RecoveryCode,
+    RecoveryRequest,
+)
 
 __all__ = [
     "User", "UserRole", "UserSession", "CanteenSettings", "MenuItem", "MenuCategory",
@@ -20,4 +27,5 @@ __all__ = [
     "CollectionToken", "Payment", "PaymentRecordStatus", "PaymentAttempt", "AttemptStatus",
     "WebhookEvent", "WebhookStatus", "StockReservation", "ReservationStatus",
     "Refund", "RefundStatus", "OtpChallenge", "PasswordResetToken", "RecoveryCode", "RecoveryRequest",
+    "PasswordRecoveryChallenge", "AccountRecoveryRequest",
 ]

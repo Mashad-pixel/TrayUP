@@ -131,6 +131,38 @@ def revoke_user_sessions(user_id):
     return count
 
 
+def current_session_token_hash():
+    """Return the stored hash for this browser's session token, if present."""
+    token = session.get(SESSION_KEY)
+    if not isinstance(token, str) or not token:
+        return None
+    return hash_token(token)
+
+
+def list_user_sessions(user_id):
+    """Return a user's session rows, with the newest sessions first."""
+    return (
+        UserSession.query
+        .filter_by(user_id=user_id, revoked_at=None)
+        .order_by(UserSession.created_at.desc())
+        .all()
+    )
+
+
+def revoke_other_sessions(user_id):
+    """End every live session except the browser making this request."""
+    current_hash = current_session_token_hash()
+    query = UserSession.query.filter(
+        UserSession.user_id == user_id,
+        UserSession.revoked_at.is_(None),
+    )
+    if current_hash is not None:
+        query = query.filter(UserSession.token_hash != current_hash)
+    count = query.update({"revoked_at": utcnow()}, synchronize_session="fetch")
+    db.session.commit()
+    return count
+
+
 def prune_sessions():
     """Delete expired and revoked session rows. Returns how many were removed."""
     now = utcnow()

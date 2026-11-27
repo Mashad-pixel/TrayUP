@@ -1,6 +1,8 @@
+import hashlib
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, jsonify, request, session
+from flask_limiter.util import get_remote_address
 from flask_login import current_user, login_required, login_user, logout_user
 from flask_wtf.csrf import generate_csrf
 from sqlalchemy.exc import IntegrityError
@@ -27,6 +29,17 @@ _DUMMY_HASH = generate_password_hash("not-a-real-password")
 # Holds the user id between a correct password and a correct authenticator code. The
 # password step does not log the user in, so nothing privileged is reachable yet.
 _PENDING_MFA_KEY = "mfa_pending"
+
+
+def _login_account_key():
+    """Rate-limit login attempts per normalized email without storing the address in the key."""
+    payload = request.get_json(silent=True)
+    email = payload.get("email") if isinstance(payload, dict) else None
+    if isinstance(email, str) and email.strip():
+        normalized = normalize_email(email)
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:40]
+        return f"login-account:{digest}"
+    return f"login-ip:{get_remote_address()}"
 
 
 def success_response(message, data=None, status=200):
@@ -90,7 +103,7 @@ def _finish_login(user, mfa_verified):
 
 
 @auth_bp.route("/login", methods=["POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("5 per minute", key_func=_login_account_key)
 def login():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):

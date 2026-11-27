@@ -27,6 +27,50 @@ def validate_rate_limit_storage(config, environment):
     return True
 
 
+def validate_runtime_settings(settings, environment):
+    """Validate presence-verification settings before they can weaken runtime checks."""
+    environment = str(environment).lower()
+    latitude = settings.get("CANTEEN_LATITUDE")
+    longitude = settings.get("CANTEEN_LONGITUDE")
+
+    if environment == "production" and (latitude is None or longitude is None):
+        if latitude is None and longitude is None:
+            raise RuntimeError("CANTEEN_LATITUDE and CANTEEN_LONGITUDE are required in production.")
+        raise RuntimeError("Set both CANTEEN_LATITUDE and CANTEEN_LONGITUDE.")
+    if (latitude is None) != (longitude is None):
+        raise RuntimeError("Set both CANTEEN_LATITUDE and CANTEEN_LONGITUDE.")
+
+    if latitude is not None and longitude is not None:
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("CANTEEN_LATITUDE and CANTEEN_LONGITUDE must be numeric.") from exc
+        if not -90 <= latitude <= 90:
+            raise RuntimeError(
+                "Coordinates must be within valid ranges: latitude between -90 and 90, "
+                "longitude between -180 and 180."
+            )
+        if not -180 <= longitude <= 180:
+            raise RuntimeError(
+                "Coordinates must be within valid ranges: latitude between -90 and 90, "
+                "longitude between -180 and 180."
+            )
+
+    if environment == "production":
+        base_url = settings.get("PUBLIC_BASE_URL")
+        if not isinstance(base_url, str) or not base_url.startswith("https://"):
+            raise RuntimeError("PUBLIC_BASE_URL must use https in production.")
+
+    token_ttl = settings.get("PRESENCE_TOKEN_TTL_SECONDS")
+    session_ttl = settings.get("PRESENCE_SESSION_TTL_SECONDS")
+    if not isinstance(token_ttl, int) or not 1 <= token_ttl <= 30:
+        raise RuntimeError("PRESENCE_TOKEN_TTL_SECONDS (TOKEN_TTL) must be between 1 and 30 seconds.")
+    if not isinstance(session_ttl, int) or session_ttl <= token_ttl:
+        raise RuntimeError("PRESENCE_SESSION_TTL_SECONDS (SESSION_TTL) must exceed TOKEN_TTL.")
+    return True
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", DEV_SECRET_KEY)
 
