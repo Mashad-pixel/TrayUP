@@ -5,7 +5,7 @@
     products: [
       { id: 1, name: "Masala Dosa", category: "Breakfast", price: 60, description: "Crisp dosa filled with spiced potato masala.", image: image("photo-1668236543090-82eba5ee5976"), isVeg: true, rating: 4.8, isPopular: true, isAvailable: true },
       { id: 2, name: "Idli Sambar", category: "Breakfast", price: 40, description: "Soft steamed idlis with warm lentil sambar.", image: image("photo-1589301760014-d929f3979dbc"), isVeg: true, rating: 4.5, isPopular: false, isAvailable: true },
-      { id: 3, name: "Poori Bhaji", category: "Breakfast", price: 55, description: "Fluffy pooris served with potato bhaji.", image: image("photo-1596040033229-a9821ebd058d"), isVeg: true, rating: 4.6, isPopular: false, isAvailable: true },
+      { id: 3, name: "Poori Bhaji", category: "Breakfast", price: 55, description: "Fluffy pooris served with potato bhaji.", image: image("photo-1789990642036-e10c2df4fc81"), isVeg: true, rating: 4.6, isPopular: false, isAvailable: true },
       { id: 4, name: "Vegetable Upma", category: "Breakfast", price: 35, description: "Savory semolina cooked with vegetables.", image: image("photo-1630383249896-424e482df921"), isVeg: true, rating: 4.3, isPopular: false, isAvailable: true },
       { id: 5, name: "Paneer Paratha", category: "Breakfast", price: 70, description: "Whole-wheat paratha stuffed with seasoned paneer.", image: image("photo-1599487488170-d11ec9c172f0"), isVeg: true, rating: 4.7, isPopular: false, isAvailable: true },
       { id: 6, name: "Plain Dosa", category: "Breakfast", price: 45, description: "Thin, crisp golden rice and lentil dosa.", image: image("photo-1694849789325-914b71ab4075"), isVeg: true, rating: 4.4, isPopular: false, isAvailable: true },
@@ -49,41 +49,6 @@
       { id: 41, name: "Oreo Milkshake", category: "Drinks", price: 90, description: "Chocolate cookies blended with cold milk.", image: image("photo-1572490122747-3968b75cc699"), isVeg: true, rating: 4.7, isPopular: false, isAvailable: true },
       { id: 42, name: "Chocolate Milkshake", category: "Drinks", price: 80, description: "Rich chocolate milkshake topped with cream.", image: image("photo-1541658016709-82535e94bc69"), isVeg: true, rating: 4.6, isPopular: false, isAvailable: true },
       { id: 43, name: "Water Bottle", category: "Drinks", price: 20, description: "Chilled sealed packaged drinking water.", image: image("photo-1602143407151-7111542de6e8"), isVeg: true, rating: 4.2, isPopular: false, isAvailable: true }
-    ],
-
-    orders: [
-      { id: "TY1001", items: [{ productId: 12, quantity: 1 }], total: 150, status: "Delivered" },
-      { id: "TY1002", items: [{ productId: 1, quantity: 2 }], total: 120, status: "Preparing" },
-      { id: "TY1003", items: [{ productId: 34, quantity: 1 }, { productId: 26, quantity: 1 }], total: 150, status: "On the way" },
-      { id: "TY1004", items: [{ productId: 11, quantity: 1 }], total: 120, status: "Delivered" },
-      { id: "TY1005", items: [{ productId: 22, quantity: 2 }], total: 30, status: "Cancelled" }
-    ],
-
-    sampleSales: [
-      { period: "day", productId: 12, quantity: 24 },
-      { period: "day", productId: 1, quantity: 21 },
-      { period: "day", productId: 23, quantity: 18 },
-      { period: "day", productId: 34, quantity: 16 },
-      { period: "day", productId: 13, quantity: 14 },
-      { period: "day", productId: 28, quantity: 12 },
-      { period: "day", productId: 11, quantity: 10 },
-      { period: "day", productId: 26, quantity: 9 },
-      { period: "week", productId: 1, quantity: 138 },
-      { period: "week", productId: 12, quantity: 126 },
-      { period: "week", productId: 34, quantity: 102 },
-      { period: "week", productId: 23, quantity: 96 },
-      { period: "week", productId: 13, quantity: 83 },
-      { period: "week", productId: 11, quantity: 76 },
-      { period: "week", productId: 28, quantity: 68 },
-      { period: "week", productId: 26, quantity: 59 },
-      { period: "month", productId: 12, quantity: 514 },
-      { period: "month", productId: 13, quantity: 468 },
-      { period: "month", productId: 1, quantity: 441 },
-      { period: "month", productId: 11, quantity: 386 },
-      { period: "month", productId: 23, quantity: 354 },
-      { period: "month", productId: 34, quantity: 329 },
-      { period: "month", productId: 28, quantity: 298 },
-      { period: "month", productId: 26, quantity: 247 }
     ]
   };
 
@@ -505,91 +470,20 @@
     ]
   };
 
-  demoData.products = demoData.products.map((product) => ({
-    ...product,
-    history: foodHistory[product.id] || historyByCategory[product.category],
-    ingredients: ingredientsByProduct[product.id] || ingredientsByCategory[product.category],
-    preparation: preparationByProduct[product.id],
-    recipeSteps: recipeStepsByProduct[product.id] || [],
-    nutrition: nutritionByProduct[product.id] || {}
-  }));
-
-  const activityKey = "trayup-order-activity";
-  const ordersKey = "trayup-user-orders";
-
-  function getActivity() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(activityKey) || "null");
-      if (Array.isArray(saved)) return saved;
-
-      const now = new Date();
-      const seeded = demoData.sampleSales.map((sale, index) => {
-        const orderedAt = new Date(now);
-        if (sale.period === "day") {
-          orderedAt.setHours(Math.max(0, now.getHours() - 1), index % 60, 0, 0);
-        } else if (sale.period === "week") {
-          orderedAt.setDate(now.getDate() - (1 + (index % 6)));
-        } else {
-          orderedAt.setDate(now.getDate() - (8 + (index % 22)));
-        }
-        return {
-          productId: sale.productId,
-          quantity: sale.quantity,
-          orderedAt: orderedAt.toISOString()
-        };
-      });
-      localStorage.setItem(activityKey, JSON.stringify(seeded));
-      return seeded;
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function nextReceiptNumber(orders) {
-    const now = new Date();
-    const day = String(now.getDate()).padStart(2, "0");
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const prefix = `${day}${month}`;
-    let sequence = 0;
-
-    orders.forEach((order) => {
-      const createdAt = order.createdAt ? new Date(order.createdAt) : null;
-      if (!createdAt || Number.isNaN(createdAt.getTime())) return;
-      if (createdAt.getDate() !== now.getDate() || createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) return;
-      const match = String(order.id || "").match(new RegExp(`^${prefix}(\\d+)$`));
-      if (match) sequence = Math.max(sequence, Number(match[1]));
-    });
-
-    return `${prefix}${sequence + 1}`;
-  }
-
-  demoData.getOrderActivity = getActivity;
-  demoData.recordOrder = function (order) {
-    const orders = JSON.parse(localStorage.getItem(ordersKey) || "[]");
-    const savedOrder = {
-      ...order,
-      id: order.id || nextReceiptNumber(orders),
-      createdAt: order.createdAt || new Date().toISOString()
+  demoData.products = demoData.products.map((product) => {
+    const details = { ...product };
+    delete details.rating;
+    details.isFeatured = Boolean(details.isPopular);
+    delete details.isPopular;
+    return {
+      ...details,
+      history: foodHistory[product.id] || historyByCategory[product.category],
+      ingredients: ingredientsByProduct[product.id] || ingredientsByCategory[product.category],
+      preparation: preparationByProduct[product.id],
+      recipeSteps: recipeStepsByProduct[product.id] || [],
+      nutrition: nutritionByProduct[product.id] || {}
     };
-    orders.unshift(savedOrder);
-    localStorage.setItem(ordersKey, JSON.stringify(orders));
-
-    const activity = getActivity();
-    savedOrder.items.forEach((entry) => {
-      const productId = Number(entry.productId || entry.id);
-      const quantity = Number(entry.quantity || entry.qty || 1);
-      if (demoData.products.some((product) => product.id === productId) && quantity > 0) {
-        activity.push({
-          productId,
-          quantity,
-          orderedAt: savedOrder.createdAt,
-          orderId: savedOrder.id
-        });
-      }
-    });
-    localStorage.setItem(activityKey, JSON.stringify(activity));
-    return savedOrder;
-  };
+  });
 
   window.trayDemoData = demoData;
 })();

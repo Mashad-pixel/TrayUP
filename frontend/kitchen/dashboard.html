@@ -29,6 +29,14 @@
         <p class="empty-state">Loading payment claims…</p>
       </div>
     </section>
+    <section class="kitchen-board-error" id="board-error" aria-labelledby="board-error-title" hidden>
+      <h2 id="board-error-title">Order board unavailable</h2>
+      <p id="board-error-message"></p>
+      <div>
+        <button class="btn btn-primary" id="retry-board" type="button">Try again</button>
+        <a class="btn btn-secondary" id="board-signin" href="./login.html" hidden>Sign in with a kitchen account</a>
+      </div>
+    </section>
     <section class="kitchen-board" id="kitchen-board">
       <div class="board-column" data-status="received"><h2>Received</h2></div>
       <div class="board-column" data-status="preparing"><h2>Preparing</h2></div>

@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Order Confirmation — trayUP</title>
-  <link rel="stylesheet" href="../css/global.css?v=site-background-section-photo-v2">
-  <link rel="stylesheet" href="../css/components.css?v=scattered-doodle-v1">
-  <link rel="stylesheet" href="../css/student.css?v=confirmation-pro-v2">
-  <link rel="stylesheet" href="../css/responsive.css?v=mobile-layout-v3">
+  <link rel="stylesheet" href="../css/global.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="../css/components.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="../css/student.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="../css/responsive.css?v=customer-design-system-v8">
 </head>
 <body class="student-page">
   <div id="app-header"></div>
@@ -19,14 +19,14 @@
       <div class="confirmation-success">
         <div class="confirmation-icon" aria-hidden="true">✓</div>
         <h1 id="confirmation-title">Order confirmed</h1>
-        <p id="confirmation-copy">Your delicious meal is being prepared.</p>
+        <p id="confirmation-copy">Your order is confirmed. Visit My Orders for the latest pickup status.</p>
         <span class="receipt-label">Receipt number</span>
         <span class="receipt-number" id="receipt-number">00000</span>
       </div>
       <div class="order-progress" aria-label="Order progress">
         <div class="progress-step complete">
           <span class="progress-circle"></span>
-          <span>Order confirmed</span>
+          <span>Order placed</span>
         </div>
         <div class="progress-step complete" id="payment-progress">
           <span class="progress-circle"></span>
@@ -34,7 +34,7 @@
         </div>
         <div class="progress-step" id="completion-progress">
           <span class="progress-circle"></span>
-          <span>Order completed</span>
+          <span>Latest pickup status</span>
         </div>
       </div>
     </section>
@@ -62,7 +62,7 @@
   </main>
   <script src="../shared/config.js"></script>
   <script src="../shared/storage.js"></script>
-  <script src="../shared/components.js?v=static-doodles-v1"></script>
+  <script src="../shared/components.js?v=featured-nav-v1"></script>
   <script>
     document.getElementById("app-header").innerHTML = trayComponents.header();
     const order = trayStorage.get("trayup-last-order", null);
@@ -72,9 +72,6 @@
     })[character]);
     const paid = ["paid", "captured", "completed", "success"].includes(String(data.payment_status || "").toLowerCase());
     const awaitingConfirmation = String(data.payment_status || "").toLowerCase() === "awaiting_confirmation";
-    if (paid) {
-      window.location.replace(`./order-placed-animation.html?receipt=${encodeURIComponent(data.order_number || "Pending")}`);
-    }
     document.getElementById("receipt-number").textContent = escapeHtml(data.order_number || "Pending");
     document.getElementById("confirmation-name").textContent = escapeHtml(data.student_name || "Not provided");
     document.getElementById("confirmation-phone").textContent = escapeHtml(data.phone_number || "Not provided");

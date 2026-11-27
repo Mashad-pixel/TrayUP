@@ -59,9 +59,9 @@
 .food-card-body > .eyebrow { margin-bottom: 7px; color: #f2cf72; }
 
 .food-card h3 {
-  font-family: "DM Serif Display", var(--serif);
+  font-family: var(--display);
   color: var(--dish-text);
-  font-weight: 400;
+  font-weight: 700;
   font-size: clamp(19px, 1.65vw, 23px);
   line-height: 1.15;
   min-height: 46px;
@@ -69,11 +69,20 @@
 
 .food-card-description { min-height: 42px; margin-top: 7px; color: var(--dish-muted); font-size: 13px; line-height: 1.5; }
 .food-card-status-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-.food-card-diet { font-size: 16px; }
-.food-card-diet.is-veg { color: #8bd1a2; }
-.food-card-diet.is-non-veg { color: #f3947d; }
-.food-card-diet.is-egg { color: #f2cf72; }
-.food-card-orders { margin-top: 8px; color: #f2cf72; font-size: 12px; font-weight: 700; }
+.food-card-diet {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+.food-card-diet.is-veg { color: #278044; }
+.food-card-diet.is-non-veg { color: #b94a36; }
+.food-card-diet.is-egg { color: #94620f; }
 
 .food-meta {
   display: flex;

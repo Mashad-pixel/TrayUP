@@ -15,82 +15,106 @@
   }
 
   function statusClass(status) {
-    if (status === "Delivered") return "";
-    if (status === "Cancelled") return "danger";
+    const normalized = String(status).toLowerCase();
+    if (normalized === "collected" || normalized === "completed" || normalized === "delivered") return "";
+    if (normalized === "cancelled") return "danger";
     return "warning";
   }
 
-  function renderDemoOrders(apiOrders = []) {
-    const savedOrders = trayStorage.get("trayup-user-orders", []);
-    const savedOrdersById = new Map(savedOrders.map((order) => [
-      String(order.id || order.order_number),
-      order
-    ]));
-    const seen = new Set();
-    const allOrders = [...apiOrders, ...savedOrders, ...window.trayDemoData.orders]
-      .filter((order) => {
-        const id = order.id || order.order_number;
-        if (seen.has(String(id))) return false;
-        seen.add(String(id));
-        return true;
-      })
-      .map((order) => ({
-        ...(savedOrdersById.get(String(order.id || order.order_number)) || {}),
-        ...order
-      }));
+  function renderOrderProgress(status) {
+    const steps = ["received", "preparing", "ready", "collected"];
+    const currentIndex = steps.indexOf(status);
+    if (currentIndex < 0) return "";
 
+    const labels = ["Received", "Preparing", "Ready for pickup", "Collected"];
+    return `
+      <div class="order-progress order-progress-compact" aria-label="Order progress">
+        ${labels.map((label, index) => {
+          const complete = index < currentIndex || currentIndex === steps.length - 1;
+          const active = index === currentIndex && !complete;
+          const state = complete ? "complete" : active ? "active" : "";
+          return `<div class="progress-step ${state}" ${active ? 'aria-current="step"' : ""}><span class="progress-circle"></span><span>${label}</span></div>`;
+        }).join("")}
+      </div>`;
+  }
+
+  function renderOrders(allOrders) {
     ordersById.clear();
-    allOrders.forEach((order) => ordersById.set(String(order.id || order.order_number), order));
+    allOrders.forEach((order) => {
+      if (order.id != null) ordersById.set(String(order.id), order);
+      if (order.order_number) ordersById.set(String(order.order_number), order);
+    });
     target.innerHTML = allOrders.map((order) => {
       const items = (order.items || []).map((entry) => {
-        const product = products.find((item) => item.id === Number(entry.productId || entry.menu_item_id || entry.id));
+        const entryName = entry.item_name || entry.name || entry.menu_item_name || "";
+        const product = entryName
+          ? products.find((item) => item.name.toLowerCase() === String(entryName).toLowerCase())
+          : products.find((item) => item.id === Number(entry.productId || entry.menu_item_id || entry.id));
+        const quantity = Number(entry.quantity || entry.qty || 1);
+        const price = entry.unit_price_paise != null ? Number(entry.unit_price_paise) / 100 :
+          Number(entry.price ?? entry.unit_price ?? product?.price ?? 0);
         return {
           ...product,
-          name: product?.name || entry.name || entry.menu_item_name || "Food item",
+          name: entryName || product?.name || "Food item",
           image: product?.image || entry.image || "",
           description: product?.description || entry.description || "",
-          price: product?.price ?? entry.price ?? entry.unit_price ?? 0,
-          quantity: Number(entry.quantity || entry.qty || 1)
+          price,
+          lineTotal: entry.line_total_paise != null ? Number(entry.line_total_paise) / 100 : price * quantity,
+          quantity,
+          productId: product?.id
         };
       });
-      const id = order.id || order.order_number || "Order";
-      const safeId = escapeHtml(id);
-      const status = order.status || order.order_status || "Received";
-      const total = Number(order.total ?? order.total_amount ?? order.amount ?? 0);
-      const studentName = order.studentName || order.student_name || "Not provided";
-      const phoneNumber = order.phoneNumber || order.phone_number || order.phone || "Not provided";
-      const instructions = order.instructions || order.description || "None";
+      const orderKey = String(order.id || order.order_number || "Order");
+      const orderNumber = order.order_number || order.id || "Order";
+      const safeKey = escapeHtml(orderKey);
+      const safeNumber = escapeHtml(orderNumber);
+      const statusKey = String(order.order_status || order.status || "received").toLowerCase().replace(/ /g, "_");
+      const status = statusKey
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+      const total = order.total_paise != null ? Number(order.total_paise) / 100 :
+        Number(order.total ?? order.total_amount ?? order.amount ?? 0);
+      const studentName = order.studentName || order.student_name || "";
+      const phoneNumber = order.phoneNumber || order.phone_number || order.phone || "";
+      const instructions = order.instructions || order.description || "";
       const paymentMethod = String(order.paymentMethod || order.payment_method || "Not selected");
-      const paymentStatus = String(order.paymentStatus || order.payment_status || "pending");
+      const paymentStatus = String(order.paymentStatus || order.payment_status || "pending").toLowerCase();
       const paymentProvider = String(order.paymentProvider || order.payment_provider || "");
-      const paymentMethodLabel = paymentProvider || (paymentMethod.toLowerCase() === "cash" ? "Cash on pickup" :
-        paymentMethod.toLowerCase() === "online" ? "Online" : paymentMethod);
+      const paymentMethodLabels = {
+        cash: "Cash on pickup",
+        online: "Online",
+        upi: "UPI",
+        upi_soundbox: "UPI / Soundbox",
+        sandbox: "Test Sandbox"
+      };
+      const paymentMethodLabel = paymentProvider || paymentMethodLabels[paymentMethod.toLowerCase()] || paymentMethod;
       const paymentStatusLabel = paymentStatus === "cash_due" ? "Due in cash" :
         paymentStatus === "demo_pending" || paymentStatus === "online_pending" ? "Pending" :
-        paymentStatus === "paid" ? "Paid" : paymentStatus;
-      const paymentComplete = paymentStatus === "paid" || ["captured","completed","success"].includes(paymentStatus.toLowerCase());
-      const orderComplete = ["Delivered","Collected","Completed"].includes(status);
+        paymentStatus === "paid" ? "Paid" :
+        paymentStatus.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+      const normalizedStatus = statusKey.replace(/_/g, " ");
+      const orderPendingPayment = normalizedStatus === "pending payment";
+      const orderCancelled = normalizedStatus === "cancelled";
       const placedDate = order.createdAt || order.created_at;
+      const canReorder = !orderCancelled &&
+        items.length > 0 && items.every((item) => item.productId != null);
 
       return `
-        <article class="card" style="margin-bottom:14px;padding:18px" data-order="${safeId}">
-          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
-            <div>
-              <strong class="receipt-order-number">Receipt ${safeId}</strong>
-              <p style="color:var(--muted);font-size:13px;margin-top:5px">${items.length} item${items.length === 1 ? "" : "s"} · ₹${total.toLocaleString("en-IN")}</p>
+        <article class="order-card" data-order="${safeKey}">
+          <div class="order-card-header">
+            <div class="order-card-heading">
+              <strong class="receipt-order-number">Receipt ${safeNumber}</strong>
+              <p class="order-card-summary">${items.length} item${items.length === 1 ? "" : "s"} · ₹${total.toLocaleString("en-IN")}</p>
             </div>
-            <span class="status ${statusClass(status)}">${escapeHtml(status)}</span>
+            <span class="status order-status ${statusClass(status)}">${escapeHtml(status)}</span>
           </div>
-          <div class="order-progress order-progress-compact" aria-label="Order progress">
-            <div class="progress-step complete"><span class="progress-circle"></span><span>Confirmed</span></div>
-            <div class="progress-step ${paymentComplete ? "complete" : "active"}"><span class="progress-circle"></span><span>Payment</span></div>
-            <div class="progress-step ${orderComplete ? "complete" : ""}"><span class="progress-circle"></span><span>Completed</span></div>
-          </div>
-          <div class="order-customer-details">
-            <p><strong>Student name</strong>${escapeHtml(studentName)}</p>
-            <p><strong>Phone number</strong>${escapeHtml(phoneNumber)}</p>
-            <p><strong>Payment</strong>${escapeHtml(paymentMethodLabel)} · ${escapeHtml(paymentStatusLabel)}</p>
-            <p class="order-description"><strong>Description / special instructions</strong>${escapeHtml(instructions)}</p>
+          ${orderCancelled || orderPendingPayment ? "" : renderOrderProgress(statusKey)}
+          <div class="order-meta">
+            ${placedDate ? `<span><strong>Placed</strong> ${escapeHtml(new Date(placedDate).toLocaleString())}</span>` : ""}
+            <span><strong>Payment</strong> ${escapeHtml(paymentMethodLabel)} · ${escapeHtml(paymentStatusLabel)}</span>
+            ${studentName ? `<span><strong>Name</strong> ${escapeHtml(studentName)}</span>` : ""}
+            ${phoneNumber ? `<span><strong>Phone</strong> ${escapeHtml(phoneNumber)}</span>` : ""}
+            ${instructions ? `<span><strong>Instructions</strong> ${escapeHtml(instructions)}</span>` : ""}
           </div>
           <div class="order-food-carousel">
             <div class="order-food-track" tabindex="0" aria-label="Ordered foods; swipe horizontally to view each item">
@@ -99,10 +123,10 @@
                   <div>
                     <strong>${escapeHtml(item.name)}</strong>
                     <p>Qty ${item.quantity} · ₹${Number(item.price).toLocaleString("en-IN")} each</p>
-                    <p>${escapeHtml(item.description)}</p>
-                    <strong>Item total: ₹${(Number(item.price) * item.quantity).toLocaleString("en-IN")}</strong>
+                    ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
+                    <strong>Item total: ₹${Number(item.lineTotal).toLocaleString("en-IN")}</strong>
                   </div>
-                  <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'">
+                  ${item.image ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.remove()">` : ""}
                 </div>
               `).join("")}
             </div>
@@ -114,12 +138,12 @@
               </div>
             ` : ""}
           </div>
-          <div class="order-details" hidden style="border-top:1px solid #eee;padding-top:12px;color:var(--muted);font-size:13px">
+          <div class="order-details" hidden>
             ${placedDate ? `Placed ${escapeHtml(new Date(placedDate).toLocaleString())} · ` : ""}Payment status ${escapeHtml(paymentStatusLabel)} · Order total ₹${total.toLocaleString("en-IN")}
           </div>
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
-            <button class="btn btn-secondary" type="button" data-view="${safeId}">View Details</button>
-            <button class="btn btn-primary" type="button" data-reorder="${safeId}" ${status === "Cancelled" ? "disabled" : ""}>Reorder</button>
+          <div class="order-card-actions">
+            <button class="btn btn-secondary" type="button" data-view="${safeKey}" aria-expanded="false">View Details</button>
+            <button class="btn btn-primary" type="button" data-reorder="${safeKey}" ${canReorder ? "" : "disabled"}>Reorder</button>
           </div>
         </article>`;
     }).join("");
@@ -132,16 +156,45 @@
   }
 
   async function load() {
+    target.innerHTML = '<div class="empty-state" role="status">Loading your orders…</div>';
     try {
       const response = await trayApi.get("/orders");
-      const orders = response?.data?.orders || [];
-      renderDemoOrders(orders);
-      return;
-    } catch (_) {}
-    renderDemoOrders();
+      const orders = response?.data?.orders;
+      if (!Array.isArray(orders)) throw new Error("The orders response was invalid.");
+      if (!orders.length) {
+        target.innerHTML = `
+          <div class="empty-state">
+            <h2>No orders yet</h2>
+            <p>Your placed orders will appear here.</p>
+            <a class="btn btn-primary" href="../index.html">Browse the menu</a>
+          </div>`;
+        return;
+      }
+      renderOrders(orders);
+    } catch (error) {
+      if (error.status === 401) {
+        target.innerHTML = `
+          <div class="empty-state" role="status">
+            <h2>Sign in to view your orders</h2>
+            <p>Your order history is linked to your student account.</p>
+            <a class="btn btn-primary" href="./login.html?next=tracking.html">Sign in</a>
+          </div>`;
+        return;
+      }
+      target.innerHTML = `
+        <div class="empty-state" role="alert">
+          <h2>Orders couldn’t load</h2>
+          <p>Please check your connection and try again.</p>
+          <button class="btn btn-secondary" type="button" data-retry-orders>Try again</button>
+        </div>`;
+    }
   }
 
   target.addEventListener("click", (event) => {
+    if (event.target.closest("[data-retry-orders]")) {
+      load();
+      return;
+    }
     const previous = event.target.closest("[data-carousel-prev]");
     const next = event.target.closest("[data-carousel-next]");
     if (previous || next) {
@@ -157,20 +210,18 @@
     if (view) {
       const details = view.closest("[data-order]").querySelector(".order-details");
       details.hidden = !details.hidden;
+      view.setAttribute("aria-expanded", String(!details.hidden));
       view.textContent = details.hidden ? "View Details" : "Hide Details";
     }
     if (reorder) {
-      const savedOrders = trayStorage.get("trayup-user-orders", []);
-      const order = ordersById.get(reorder.dataset.reorder) ||
-        [...savedOrders, ...window.trayDemoData.orders].find((entry) => String(entry.id) === reorder.dataset.reorder);
+      const order = ordersById.get(reorder.dataset.reorder);
       if (!order) return;
       const cart = trayStorage.get("trayup-cart", []);
       (order.items || []).forEach((entry) => {
-        const product = products.find((item) =>
-          item.id === Number(entry.productId || entry.menu_item_id || entry.id) ||
-          item.name === entry.name ||
-          item.name === entry.menu_item_name
-        );
+        const entryName = entry.item_name || entry.name || entry.menu_item_name || "";
+        const product = entryName
+          ? products.find((item) => item.name.toLowerCase() === String(entryName).toLowerCase())
+          : products.find((item) => item.id === Number(entry.productId || entry.menu_item_id || entry.id));
         if (!product) return;
         const quantity = Number(entry.quantity || entry.qty || 1);
         const existing = cart.find((item) => item.id === product.id);

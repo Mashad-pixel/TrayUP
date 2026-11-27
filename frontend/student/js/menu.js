@@ -1,17 +1,18 @@
 (function () {
-  const categories = ["All", "Breakfast", "Lunch", "Snacks", "Drinks", "Popular"];
+  const categories = ["All", "Breakfast", "Lunch", "Snacks", "Drinks", "Featured"];
 
   const header = document.getElementById("app-header");
   const grid = document.getElementById("food-grid");
   const drawer = document.getElementById("cart-drawer");
-  const popularPeriods = document.getElementById("popular-periods");
   const heroTrack = document.getElementById("hero-track");
   const heroCount = document.getElementById("hero-slide-count");
   const heroCarousel = document.querySelector(".menu-hero");
+  const compactViewport = window.matchMedia("(max-width: 680px)");
+  const mobileCartButton = document.querySelector("[data-mobile-cart]");
+  const mobileCartCount = document.querySelector("[data-mobile-cart-count]");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const heroTransitionDuration = 700;
-  let activeCategory = "Popular";
-  let activePeriod = "day";
+  let activeCategory = "Featured";
   let activeMood = "";
   let heroProducts = [];
   let heroIndex = 0;
@@ -24,7 +25,8 @@
   let catalog = window.trayDemoData.products;
   const searchParams = new URLSearchParams(window.location.search);
   const requestedCategory = searchParams.get("category");
-  if (categories.includes(requestedCategory)) activeCategory = requestedCategory;
+  if (requestedCategory === "Popular") activeCategory = "Featured";
+  else if (categories.includes(requestedCategory)) activeCategory = requestedCategory;
   const initialSearch = searchParams.get("search");
   if (initialSearch) activeCategory = "All";
   header.innerHTML = trayComponents.header(activeCategory);
@@ -70,21 +72,6 @@
     });
 
     return score;
-  }
-
-  function getPopularCounts(period) {
-    const now = new Date();
-    const start = new Date(now);
-    if (period === "day") start.setHours(0, 0, 0, 0);
-    else start.setDate(now.getDate() - (period === "week" ? 7 : 30));
-
-    const counts = new Map();
-    window.trayDemoData.getOrderActivity().forEach((sale) => {
-      const orderedAt = new Date(sale.orderedAt);
-      if (Number.isNaN(orderedAt.getTime()) || orderedAt < start || orderedAt > now) return;
-      counts.set(sale.productId, (counts.get(sale.productId) || 0) + sale.quantity);
-    });
-    return counts;
   }
 
   function escapeHtml(value) {
@@ -133,8 +120,8 @@
         aria-hidden="true" tabindex="-1" inert>
         <img class="hero-slide-image" src="${escapeHtml(item.image)}" alt="" loading="eager">
         <div class="hero-copy">
-          <div class="open-status">Made for the in-between</div>
-          <span class="hero-category">${escapeHtml(item.category)} · Popular pick</span>
+          <div class="hero-kicker">Campus canteen menu</div>
+          <span class="hero-category">${escapeHtml(item.category)} · Featured dish</span>
           <h1>${escapeHtml(item.name)}</h1>
           <p>${escapeHtml(item.description)}</p>
           <div class="hero-slide-footer">
@@ -147,12 +134,8 @@
   }
 
   function renderHero() {
-    const counts = getPopularCounts("day");
     heroProducts = catalog
-      .filter((item) => item.isPopular && item.isAvailable)
-      .map((item) => ({ item, count: counts.get(item.id) || 0 }))
-      .sort((a, b) => b.count - a.count || b.item.rating - a.item.rating)
-      .map(({ item }) => item);
+      .filter((item) => item.isFeatured && item.isAvailable);
 
     if (!heroProducts.length) {
       heroCarousel.hidden = true;
@@ -239,7 +222,7 @@
 
   function updateHeroAutoplay() {
     window.clearInterval(heroTimer);
-    if (heroPaused || heroProducts.length < 2 || document.hidden) return;
+    if (heroPaused || compactViewport.matches || heroProducts.length < 2 || document.hidden) return;
     heroTimer = window.setInterval(() => showHeroSlide(1), 5200);
   }
 
@@ -260,31 +243,22 @@
     if (heroPaused && heroTransitioning) finishHeroTransition();
     updateHeroAutoplay();
   });
-
-  popularPeriods.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-period]");
-    if (!button) return;
-    activePeriod = button.dataset.period;
-    popularPeriods.querySelectorAll("button").forEach((entry) => entry.classList.toggle("active", entry === button));
-    renderCatalog();
-  });
+  compactViewport.addEventListener?.("change", updateHeroAutoplay);
 
   function renderCatalog() {
     const query = document.querySelector(".search input")?.value.trim() || "";
     const normalizedQuery = normalizeSearch(query);
     const availability = document.getElementById("availability-filter")?.value || "all";
     const diet = document.getElementById("diet-filter")?.value || "all";
-    const isPopularView = activeCategory === "Popular";
-    const popularCounts = isPopularView ? getPopularCounts(activePeriod) : new Map();
-    popularPeriods.hidden = !isPopularView;
+    const isFeaturedView = activeCategory === "Featured";
     let visible = catalog
-      .map((item) => ({ item, score: searchScore(item, query), sales: popularCounts.get(item.id) || 0 }))
+      .map((item) => ({ item, score: searchScore(item, query) }))
       .filter(({ item, score }) =>
         score > 0 &&
         (!activeMood || matchesMood(item, activeMood)) &&
         (normalizedQuery ||
           activeCategory === "All" ||
-          (isPopularView ? popularCounts.has(item.id) : item.category === activeCategory)) &&
+          (isFeaturedView ? item.isFeatured : item.category === activeCategory)) &&
         (availability !== "available" || item.isAvailable) &&
         (diet === "all" ||
           (diet === "veg" && item.isVeg) ||
@@ -292,8 +266,8 @@
           (diet === "egg" && (item.dietType === "egg" ||
             /\begg\b/i.test(`${item.name} ${item.description}`))))
       )
-      .sort((a, b) => isPopularView ? b.sales - a.sales || b.score - a.score : b.score - a.score)
-      .map(({ item, sales }, index) => ({ ...item, periodOrders: sales, popularityRank: isPopularView ? index + 1 : 0 }));
+      .sort((a, b) => b.score - a.score)
+      .map(({ item }) => item);
 
     if (!visible.length) {
       grid.innerHTML = "";
@@ -302,40 +276,40 @@
       empty.style.gridColumn = "1/-1";
       const title = document.createElement("h3");
       title.textContent = normalizedQuery ? "Couldn't find that craving" :
-        isPopularView ? "No orders recorded for this period yet" : "No dishes found";
+        isFeaturedView ? "No featured dishes right now" : "No dishes found";
       const copy = document.createElement("p");
       copy.textContent = normalizedQuery ? `No menu items matched "${query}". Try another dish or category.` :
-        isPopularView ? "Popular dishes will appear here as orders are recorded." : "Try a different category or search.";
+        isFeaturedView ? "Browse the full menu to find something you love." : "Try a different category or search.";
       empty.append(title, copy);
       grid.appendChild(empty);
       const heading = document.querySelector(".menu-heading h2");
-      heading.textContent = normalizedQuery ? "Search results" : isPopularView ? "Popular today" : activeCategory;
+      heading.textContent = normalizedQuery ? "Search results" : isFeaturedView ? "Featured dishes" : activeCategory;
       return;
     }
     const heading = document.querySelector(".menu-heading h2");
-    popularPeriods.hidden = !isPopularView;
     heading.textContent = normalizedQuery ? `Results for "${query}"` :
-      activeCategory === "Popular" ? `Popular ${activePeriod === "day" ? "today" : activePeriod === "week" ? "this week" : "this month"}` :
+      activeCategory === "Featured" ? "Featured dishes" :
       activeCategory === "All" ? "All dishes" : activeCategory;
     grid.innerHTML = visible.map((item) => `
-      <article class="food-card" data-id="${escapeHtml(item.id)}" tabindex="0" role="link" aria-label="View ${escapeHtml(item.name)} details">
+      <article class="food-card" data-id="${escapeHtml(item.id)}">
         <div class="food-card-image-wrap">
-          <img class="food-card-image" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22600%22 height=%22450%22%3E%3Crect width=%22100%25%22 height=%22100%25%22 fill=%22%232d322f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23f7f4eb%22%3E${encodeURIComponent(item.name)}%3C/text%3E%3C/svg%3E'">
-          ${item.isPopular ? '<span class="food-card-ribbon">Campus pick</span>' : ""}
+          <a class="food-card-image-link" href="./student/product.html?id=${encodeURIComponent(item.id)}" aria-label="View ${escapeHtml(item.name)} details">
+            <img class="food-card-image" src="${escapeHtml(item.image)}" alt="" loading="lazy" onerror="this.style.display='none';this.closest('.food-card-image-wrap').classList.add('food-image-unavailable')">
+          </a>
+          ${item.isFeatured ? '<span class="food-card-ribbon">Featured</span>' : ""}
         </div>
         <div class="food-card-body">
-          <span class="eyebrow">${escapeHtml(item.category)}${item.popularityRank ? ` · #${item.popularityRank} popular` : ""}</span>
-          <h3>${escapeHtml(item.name)}</h3>
+          <span class="eyebrow">${escapeHtml(item.category)}</span>
+          <h3><a href="./student/product.html?id=${encodeURIComponent(item.id)}">${escapeHtml(item.name)}</a></h3>
           <p class="food-card-description">${escapeHtml(item.description || "")}</p>
           <div class="food-card-status-row">
-            <span class="status ${item.isAvailable ? "" : "danger"}">${item.isAvailable ? "Available" : "Sold out"}</span>
-            <span class="food-card-diet ${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "is-egg" : item.isVeg ? "is-veg" : "is-non-veg"}" title="${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "Contains egg" : item.isVeg ? "Vegetarian" : "Non-vegetarian"}">●</span>
+            <span class="status ${item.isAvailable ? "" : "danger"}">${item.isAvailable ? "On menu" : "Sold out"}</span>
+            <span class="food-card-diet ${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "is-egg" : item.isVeg ? "is-veg" : "is-non-veg"}">${item.dietType === "egg" || /\begg\b/i.test(`${item.name} ${item.description}`) ? "Egg" : item.isVeg ? "Veg" : "Non-veg"}</span>
           </div>
-          ${item.popularityRank ? `<p class="food-card-orders">${item.periodOrders} ordered ${activePeriod === "day" ? "today" : activePeriod === "week" ? "this week" : "this month"}</p>` : ""}
           <div class="food-meta">
             <span class="price">${rupees(item.price)}</span>
             <div class="food-card-actions" data-card-actions="${escapeHtml(item.id)}">
-              <button class="food-card-add" type="button" data-card-add="${escapeHtml(item.id)}" ${item.isAvailable ? "" : "disabled"}>Add <span aria-hidden="true">+</span></button>
+              <button class="food-card-add" type="button" data-card-add="${escapeHtml(item.id)}" aria-label="Add ${escapeHtml(item.name)} to your tray" ${item.isAvailable ? "" : "disabled"}>Add <span aria-hidden="true">+</span></button>
               <div class="food-card-quantity" data-card-quantity-control="${escapeHtml(item.id)}" hidden>
                 <button type="button" data-card-qty="-1" data-id="${escapeHtml(item.id)}" aria-label="Remove one ${escapeHtml(item.name)}">−</button>
                 <span data-card-quantity>0</span>
@@ -362,19 +336,23 @@
     const cart = getCart();
     const quantity = cart.reduce((sum, item) => sum + item.qty, 0);
     document.getElementById("cart-count").textContent = quantity;
+    mobileCartCount.textContent = quantity;
+    mobileCartCount.hidden = quantity === 0;
+    mobileCartButton.setAttribute("aria-label", `Open your tray, ${quantity} ${quantity === 1 ? "item" : "items"}`);
     document.getElementById("cart-total").textContent = rupees(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
     document.getElementById("cart-items").innerHTML = cart.length ? cart.map((item) => `
       <div class="cart-item">
-        <img src="${item.image}" alt="">
-        <div><strong>${item.name}</strong><span>${rupees(item.price)}</span>
+        <img src="${escapeHtml(item.image)}" alt="">
+        <div><strong>${escapeHtml(item.name)}</strong><span>${rupees(item.price)}</span>
           <div class="qty-control">
-            <button type="button" data-qty="-1" data-id="${item.id}" aria-label="Decrease quantity">−</button>
-            <span>${item.qty}</span>
-            <button type="button" data-qty="1" data-id="${item.id}" aria-label="Increase quantity">+</button>
+            <button type="button" data-qty="-1" data-id="${escapeHtml(item.id)}" aria-label="Remove one ${escapeHtml(item.name)}">−</button>
+            <span>${Number(item.qty) || 0}</span>
+            <button type="button" data-qty="1" data-id="${escapeHtml(item.id)}" aria-label="Add one ${escapeHtml(item.name)}">+</button>
           </div>
         </div>
       </div>
-    `).join("") : `<div class="empty-state"><p>Your cart is empty</p></div>`;
+    `).join("") : `<div class="empty-state"><p>Your cart is empty</p><a href="#popular">Browse the menu</a></div>`;
+    document.getElementById("drawer-checkout").hidden = !cart.length;
     updateCardQuantities();
     const count = document.getElementById("cart-count");
     count.classList.remove("cart-count-pop");
@@ -411,16 +389,6 @@
       saveCart(cart.filter((entry) => entry.qty > 0));
       if (change > 0 && window.trayNotify) window.trayNotify("Good choice! Added to your tray.");
       return;
-    }
-    const card = event.target.closest(".food-card");
-    if (card) window.location.href = `./student/product.html?id=${encodeURIComponent(card.dataset.id)}`;
-  });
-  grid.addEventListener("keydown", (event) => {
-    const card = event.target.closest(".food-card");
-    if (event.target.closest("button")) return;
-    if (card && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      window.location.href = `./student/product.html?id=${encodeURIComponent(card.dataset.id)}`;
     }
   });
 
@@ -528,9 +496,9 @@
     activeMood = "";
     document.getElementById("clear-mood").hidden = true;
     document.querySelectorAll("[data-mood]").forEach((button) => button.classList.remove("active"));
-    activeCategory = "Popular";
+    activeCategory = "Featured";
     document.querySelectorAll(".category-nav a").forEach((entry) =>
-      entry.classList.toggle("active", entry.dataset.navCategory === "Popular")
+      entry.classList.toggle("active", entry.dataset.navCategory === "Featured")
     );
     renderCatalog();
   });
@@ -590,6 +558,23 @@
     renderCatalog();
   });
 
+  function showAllMenu(event) {
+    event.preventDefault();
+    activeCategory = "All";
+    activeMood = "";
+    searchInput.value = "";
+    document.getElementById("clear-mood").hidden = true;
+    document.querySelectorAll("[data-mood]").forEach((button) => button.classList.remove("active"));
+    document.querySelectorAll(".category-nav a").forEach((link) =>
+      link.classList.toggle("active", link.dataset.navCategory === "All")
+    );
+    renderCatalog();
+    document.getElementById("popular").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  document.querySelectorAll("[data-browse-all]").forEach((link) =>
+    link.addEventListener("click", showAllMenu)
+  );
+
   document.getElementById("surprise-me").addEventListener("click", () => {
     const visibleIds = new Set(Array.from(grid.querySelectorAll(".food-card"), (card) => Number(card.dataset.id)));
     const options = catalog.filter((item) => item.isAvailable && visibleIds.has(item.id));
@@ -610,7 +595,7 @@
     requestAnimationFrame(() => result.classList.add("is-revealed"));
   });
 
-  document.querySelector("[data-mobile-cart]").addEventListener("click", () => drawer.classList.add("open"));
+  mobileCartButton.addEventListener("click", () => drawer.classList.add("open"));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && drawer.classList.contains("open")) {
       drawer.classList.remove("open");

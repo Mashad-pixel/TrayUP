@@ -65,7 +65,7 @@
             </nav>
           </div>
           <nav class="category-nav" aria-label="Main navigation">
-            ${["All","Breakfast","Lunch","Snacks","Drinks","Popular","My Orders"].map((item) =>
+            ${["All","Breakfast","Lunch","Snacks","Drinks","Featured","My Orders"].map((item) =>
               `<a class="${active === item ? "active" : ""}" data-nav-category="${item}" href="${item === "My Orders" ? siteUrl("student/tracking.html") : siteUrl("index.html")}">${item}</a>`
             ).join("")}
           </nav>

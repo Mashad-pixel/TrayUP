@@ -1,5 +1,5 @@
-@import url("https://fonts.googleapis.com/css2?family=Chewy&family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=DM+Serif+Display&display=swap");
-@import "./variables.css?v=public-doodle-v2";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=DM+Serif+Display&display=swap");
+@import "./variables.css?v=customer-tokens-v5";
 @import "./reset.css";
 
 html {
@@ -18,10 +18,16 @@ body {
   background-image: none;
   color: var(--ink);
   font-family: var(--sans);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 a { color: inherit; text-decoration: none; }
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(29, 75, 62, .72);
+  outline-offset: 3px;
+}
 
 .container {
   width: min(1180px, calc(100% - 40px));
@@ -100,7 +106,7 @@ a { color: inherit; text-decoration: none; }
   border: 6px solid #fff;
   border-radius: 999px;
   background: #f5c99a;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 5px 18px rgba(68, 48, 32, .18), 0 0 0 1px rgba(93, 64, 43, .12);
 }
 
@@ -128,8 +134,9 @@ a { color: inherit; text-decoration: none; }
   z-index: 1;
   padding: 0 16px 0 2px;
   color: #5b3d29;
-  font-family: "Chewy", "Comic Sans MS", cursive;
-  font-size: 20px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: .5px;
   pointer-events: none;
@@ -184,24 +191,24 @@ a { color: inherit; text-decoration: none; }
 
 .search-sticker {
   position: absolute;
-  z-index: 3;
-  width: 52px;
-  height: 52px;
-  display: grid;
+  display: none;
+  z-index: 0;
+  width: 24px;
+  height: 24px;
   place-items: center;
-  border: 5px solid #fff;
-  border-radius: 16px;
+  border: 2px solid #fff;
+  border-radius: 8px;
   background: #fff;
   color: #5b3d29;
-  box-shadow: 0 4px 10px rgba(68, 48, 32, .14);
+  box-shadow: 0 3px 8px rgba(68, 48, 32, .12);
   pointer-events: none;
 }
 
-.search-sticker svg { width: 34px; height: 34px; }
-.search-sticker-fork { top: -40px; left: 20%; transform: rotate(-12deg); }
-.search-sticker-spoon { top: -40px; right: 10%; transform: rotate(18deg); }
-.search-sticker-burger { bottom: -38px; left: 13%; transform: rotate(-8deg); }
-.search-sticker-chef { bottom: -38px; right: 8%; transform: rotate(8deg); }
+.search-sticker svg { width: 14px; height: 14px; }
+.search-sticker-fork { top: 2px; left: 14%; transform: rotate(-10deg); }
+.search-sticker-spoon { top: 2px; right: 14%; transform: rotate(12deg); }
+.search-sticker-burger { bottom: 2px; left: 11%; transform: rotate(-6deg); }
+.search-sticker-chef { bottom: 2px; right: 9%; transform: rotate(6deg); }
 
 .nav-actions {
   display: flex;
@@ -271,9 +278,9 @@ a { color: inherit; text-decoration: none; }
 .category-nav a:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
 .section-title {
-  font-family: "DM Serif Display", var(--serif);
-  font-weight: 400;
-  letter-spacing: -1.5px;
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -1.8px;
   font-size: clamp(42px, 6vw, 68px);
   text-align: center;
   line-height: 1.05;
@@ -289,7 +296,7 @@ a { color: inherit; text-decoration: none; }
 
 .btn {
   border: 0;
-  border-radius: 4px;
+  border-radius: 10px;
   min-height: 42px;
   padding: 0 18px;
   display: inline-flex;
@@ -298,11 +305,15 @@ a { color: inherit; text-decoration: none; }
   gap: 8px;
   font-weight: 800;
   cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .btn-primary { background: var(--green); color: #fff; }
 .btn-secondary { background: #eef0eb; color: var(--ink); }
 .btn-warm { background: var(--warm); color: var(--ink); }
+.btn:not(:disabled):hover { transform: translateY(-1px); }
+.btn-primary:not(:disabled):hover { background: var(--green-2); }
+.btn:disabled { cursor: not-allowed; opacity: .58; }
 
 .toast {
   position: fixed;
@@ -371,7 +382,7 @@ body.home-page {
   align-items: center;
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
   border: 6px solid #fff;
   border-radius: 999px;
   background: #f5c99a;
@@ -387,8 +398,9 @@ body.home-page {
 }
 .home-page .search-placeholder {
   color: #5b3d29;
-  font-family: "Chewy", "Comic Sans MS", cursive;
-  font-size: 24px;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
   letter-spacing: .3px;
 }
 .home-page .search-placeholder .bitten-word {
@@ -401,19 +413,22 @@ body.home-page {
 .home-page .search-icon { width: 36px; height: 36px; margin-left: 8px; border-width: 5px; }
 .home-page .search-icon::after { width: 15px; height: 5px; right: -11px; bottom: -6px; }
 .home-page .search-sticker {
-  width: 52px;
-  height: 52px;
-  border-width: 5px;
-  border-radius: 18px;
+  display: grid;
+  z-index: 0;
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+  border-radius: 10px;
   color: #5b3d29;
+  box-shadow: 0 3px 8px rgba(68, 48, 32, .12);
 }
-.home-page .search-sticker svg { width: 24px; height: 24px; }
-.home-page .search-sticker-fork { top: -28px; left: 20%; transform: rotate(-12deg); }
-.home-page .search-sticker-spoon { top: -28px; left: 53%; transform: rotate(18deg); }
-.home-page .search-sticker-burger { bottom: -28px; left: 13%; transform: rotate(-8deg); }
-.home-page .search-sticker-chef { bottom: -28px; left: 64%; transform: rotate(8deg); }
-.home-page .search-sticker-taco { top: -28px; right: 10%; transform: rotate(10deg); }
-.home-page .search-sticker-drink { bottom: -28px; right: 8%; transform: rotate(-8deg); }
+.home-page .search-sticker svg { width: 16px; height: 16px; }
+.home-page .search-sticker-fork { top: -5px; left: 5%; transform: rotate(-10deg); }
+.home-page .search-sticker-spoon { top: -5px; left: 42%; transform: rotate(12deg); }
+.home-page .search-sticker-taco { top: -5px; right: 5%; transform: rotate(8deg); }
+.home-page .search-sticker-burger { bottom: -5px; left: 15%; transform: rotate(-6deg); }
+.home-page .search-sticker-chef { bottom: -5px; left: 56%; transform: rotate(6deg); }
+.home-page .search-sticker-drink { bottom: -5px; right: 15%; transform: rotate(-6deg); }
 .home-page .search:has(.search-suggestions:not([hidden])) .search-sticker { visibility: hidden; }
 .home-page .search-suggestions {
   position: absolute;

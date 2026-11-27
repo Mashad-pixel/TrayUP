@@ -1,13 +1,13 @@
 :root {
-  --ink: #1d1d1d;
-  --muted: #6f716d;
-  --green: #173f35;
-  --green-2: #285c4d;
-  --cream: #fbfaf6;
-  --warm: #f7df00;
-  --line: #dedfd9;
+  --ink: #202b25;
+  --muted: #66716a;
+  --green: #1d4b3e;
+  --green-2: #2f6957;
+  --cream: #f8f6f0;
+  --warm: #e9c264;
+  --line: #e3e6dc;
   --white: #fff;
-  --orange: #dc7c45;
+  --orange: #d66f43;
   --dish-surface: #2d322f;
   --dish-surface-light: #3a403c;
   --dish-surface-deep: #242926;
@@ -17,5 +17,6 @@
   --shadow: 0 10px 30px rgba(31, 42, 36, 0.08);
   --serif: Georgia, "Times New Roman", serif;
   --sans: Inter, "Segoe UI", Arial, sans-serif;
+  --display: "Space Grotesk", var(--sans);
   --radius: 14px;
 }

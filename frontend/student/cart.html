@@ -1,33 +1,47 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your Cart — trayUP</title><link rel="stylesheet" href="../css/global.css?v=site-background-section-photo-v2"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/student.css"><link rel="stylesheet" href="../css/responsive.css?v=mobile-layout-v3"></head>
+<title>Your Cart — trayUP</title><link rel="stylesheet" href="../css/global.css?v=customer-design-system-v8"><link rel="stylesheet" href="../css/components.css?v=customer-design-system-v8"><link rel="stylesheet" href="../css/student.css?v=customer-design-system-v8"><link rel="stylesheet" href="../css/responsive.css?v=customer-design-system-v8"></head>
 <body class="student-page">
 <div id="app-header"></div>
-<main class="container" style="max-width:760px;padding:40px 0">
-  <h1 style="font-family:var(--serif);font-size:42px;font-weight:400;margin-bottom:20px">Your order</h1>
-  <div id="cart-list"></div>
-  <div class="cart-foot" style="margin-top:20px;border:1px solid var(--line);border-radius:10px;background:#fff">
+<main class="container customer-page customer-cart-page">
+  <header class="customer-page-heading">
+    <p class="eyebrow">YOUR TRAY</p>
+    <h1>Your order</h1>
+    <p>Review your dishes and quantities before checkout.</p>
+  </header>
+  <div id="cart-list" class="cart-page-list" aria-live="polite"></div>
+  <div class="cart-foot cart-page-foot" id="cart-foot" hidden>
     <div class="cart-total"><span>Subtotal</span><strong id="cart-total">₹0</strong></div>
-    <button class="btn btn-secondary" id="clear-cart" type="button" style="width:100%;margin-bottom:8px">Clear cart</button>
+    <button class="btn btn-secondary" id="clear-cart" type="button">Clear cart</button>
     <a class="btn btn-primary" href="./checkout.html">Continue to checkout</a>
   </div>
 </main>
-<script src="../shared/config.js"></script><script src="../shared/storage.js"></script><script src="../shared/components.js?v=static-doodles-v1"></script><script src="../shared/notifications.js"></script>
+<script src="../shared/config.js"></script><script src="../shared/storage.js"></script><script src="../shared/components.js?v=featured-nav-v1"></script><script src="../shared/notifications.js"></script>
 <script>
 document.getElementById("app-header").innerHTML=trayComponents.header();
+function escapeHtml(value){
+ return String(value??"").replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]));
+}
 function renderCart(){
  const cart=trayStorage.get("trayup-cart",[]);
  const total=cart.reduce((n,i)=>n+i.price*i.qty,0);
  const cartCount=document.getElementById("cart-count");
- if(cartCount)cartCount.textContent=cart.reduce((sum,item)=>sum+item.qty,0);
+ if(cartCount)cartCount.textContent=cart.reduce((sum,item)=>sum+Number(item.qty||0),0);
  document.getElementById("cart-total").textContent="₹"+total.toLocaleString("en-IN");
+ document.getElementById("cart-foot").hidden=!cart.length;
  document.getElementById("cart-list").innerHTML=cart.length?cart.map(i=>`
- <div class="cart-item" style="background:#fff;padding:12px;border:1px solid var(--line);margin-bottom:8px;border-radius:10px">
- <img src="${i.image}" alt=""><div><strong>${i.name}</strong><span style="display:block;color:var(--muted);font-size:13px;margin:4px 0">₹${i.price} each</span>
- <div class="qty-control"><button type="button" data-delta="-1" data-id="${i.id}">−</button><span>${i.qty}</span><button type="button" data-delta="1" data-id="${i.id}">+</button></div></div>
- <div style="text-align:right"><strong>₹${i.price*i.qty}</strong><button type="button" data-remove="${i.id}" style="display:block;border:0;background:none;color:var(--danger);font-size:12px;margin:8px 0 0 auto;cursor:pointer">Remove</button></div>
- </div>`).join(""):`<div class="empty-state"><h3>Your cart is empty</h3><p><a href="../index.html" style="text-decoration:underline">Return to the menu</a></p></div>`;
+ <article class="cart-page-item">
+   <img src="${escapeHtml(i.image||"")}" alt="" loading="lazy" onerror="this.style.display='none';this.parentElement.classList.add('cart-item-image-fallback')">
+   <div class="cart-page-item-info"><strong>${escapeHtml(i.name)}</strong><span class="cart-page-unit-price">₹${Number(i.price).toLocaleString("en-IN")} each</span>
+     <div class="qty-control">
+       <button type="button" data-delta="-1" data-id="${Number(i.id)}" aria-label="Remove one ${escapeHtml(i.name)}">−</button>
+       <span aria-live="polite">${Number(i.qty)||0}</span>
+       <button type="button" data-delta="1" data-id="${Number(i.id)}" aria-label="Add one ${escapeHtml(i.name)}">+</button>
+     </div>
+   </div>
+   <div class="cart-page-line-total"><strong>₹${(Number(i.price)*Number(i.qty)).toLocaleString("en-IN")}</strong><button type="button" data-remove="${Number(i.id)}">Remove</button></div>
+ </article>`).join(""):`<div class="empty-state cart-empty-state"><span class="cart-empty-icon" aria-hidden="true">＋</span><h2>Your cart is empty</h2><p>Choose something fresh from the menu to get started.</p><a class="btn btn-primary" href="../index.html">Browse the menu</a></div>`;
 }
 document.getElementById("cart-list").addEventListener("click",e=>{
  const cart=trayStorage.get("trayup-cart",[]);

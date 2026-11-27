@@ -20,40 +20,41 @@
     })[character]);
   }
 
-  function croppedImage(source, crop) {
-    try {
-      const url = new URL(source, window.location.href);
-      url.searchParams.set("w", "1100");
-      url.searchParams.set("h", "900");
-      url.searchParams.set("fit", "crop");
-      url.searchParams.set("crop", crop);
-      return url.toString();
-    } catch {
-      return source;
-    }
-  }
-
-  const galleryViews = [
-    { label: "Full view", image: product.image },
-    { label: "Close-up", image: croppedImage(product.image, "center") },
-    { label: "Dish detail", image: croppedImage(product.image, "entropy") }
-  ];
+  const galleryImages = [product.image, ...(Array.isArray(product.images) ? product.images : [])]
+    .filter((image) => typeof image === "string" && image.trim())
+    .filter((image, index, images) => images.indexOf(image) === index);
+  const galleryViews = galleryImages.map((image, index) => ({
+    label: galleryImages.length === 1 ? "Food photo" : `Food photo ${index + 1}`,
+    image
+  }));
   const galleryTrack = document.getElementById("product-gallery-track");
   const thumbnails = document.getElementById("product-gallery-thumbnails");
   let activeImage = 0;
+  document.querySelectorAll(".gallery-arrow").forEach((button) => {
+    button.hidden = galleryViews.length < 2;
+  });
+  thumbnails.hidden = galleryViews.length < 2;
 
   document.title = `${product.name} — TrayUP`;
   document.getElementById("product-category").textContent = product.category;
   document.getElementById("breadcrumb-name").textContent = product.name;
   document.getElementById("product-category-label").textContent = product.category;
-  document.getElementById("product-rating").textContent = `★ ${product.rating}`;
+  const rating = Number(product.rating);
+  const reviewCount = Number(product.review_count ?? product.reviewCount);
+  const ratingElement = document.getElementById("product-rating");
+  if (Number.isFinite(rating) && rating > 0 && reviewCount > 0) {
+    ratingElement.textContent = `★ ${rating.toFixed(1)} (${reviewCount})`;
+  } else {
+    ratingElement.hidden = true;
+  }
   document.getElementById("product-name").textContent = product.name;
   document.getElementById("story-product-name").textContent = product.name;
   document.getElementById("product-description").textContent = product.description;
   document.getElementById("product-diet-dot").classList.add(product.isVeg ? "is-veg" : "is-non-veg");
   document.getElementById("product-availability").textContent =
-    `${product.isVeg ? "Vegetarian" : "Non-vegetarian"} · ${product.isAvailable ? "Available now" : "Currently unavailable"}`;
+    `${product.isVeg ? "Vegetarian" : "Non-vegetarian"} · ${product.isAvailable ? "Listed on menu" : "Currently unavailable"}`;
   document.getElementById("product-price").textContent = `₹${Number(product.price).toLocaleString("en-IN")}`;
+  document.getElementById("mobile-product-price").textContent = `₹${Number(product.price).toLocaleString("en-IN")}`;
   document.getElementById("product-ingredients").innerHTML =
     product.ingredients.map((ingredient) => `<li>${escapeHtml(ingredient)}</li>`).join("");
   const ingredientCount = product.ingredients.length;
@@ -97,7 +98,7 @@
 
   galleryTrack.innerHTML = galleryViews.map((view, index) => `
     <figure class="product-gallery-slide">
-      <img src="${escapeHtml(view.image)}" alt="${escapeHtml(product.name)} — ${escapeHtml(view.label)}" loading="eager" ${index ? "" : "fetchpriority=\"high\""}>
+      <img src="${escapeHtml(view.image)}" alt="${escapeHtml(product.name)} — ${escapeHtml(view.label)}" loading="eager" ${index ? "" : "fetchpriority=\"high\""} onerror="this.style.display='none';this.parentElement.classList.add('food-image-unavailable')">
       <figcaption>${escapeHtml(view.label)}</figcaption>
     </figure>
   `).join("");
@@ -149,18 +150,23 @@
     return cart;
   }
 
-  document.getElementById("add-product").addEventListener("click", () => {
+  function addProduct() {
     if (!product.isAvailable) return;
     addProductToCart();
     trayNotify(`${product.name} added to your cart`);
-  });
-  document.getElementById("order-product").addEventListener("click", () => {
+  }
+  function orderProduct() {
     if (!product.isAvailable) return;
     addProductToCart();
     window.location.href = "./checkout.html";
+  }
+  document.getElementById("add-product").addEventListener("click", addProduct);
+  document.getElementById("order-product").addEventListener("click", orderProduct);
+  document.getElementById("mobile-add-product").addEventListener("click", addProduct);
+  document.getElementById("mobile-order-product").addEventListener("click", orderProduct);
+  ["add-product", "order-product", "mobile-add-product", "mobile-order-product"].forEach((id) => {
+    document.getElementById(id).disabled = !product.isAvailable;
   });
-  document.getElementById("add-product").disabled = !product.isAvailable;
-  document.getElementById("order-product").disabled = !product.isAvailable;
 
   document.getElementById("cart-count").textContent = getCart()
     .reduce((sum, item) => sum + Number(item.qty || 0), 0);
@@ -182,12 +188,12 @@
 
   const relatedProducts = products
     .filter((item) => item.id !== product.id && item.category === product.category)
-    .concat(products.filter((item) => item.id !== product.id && item.isPopular && item.category !== product.category))
+    .concat(products.filter((item) => item.id !== product.id && item.isFeatured && item.category !== product.category))
     .slice(0, 8);
   document.getElementById("related-product-track").innerHTML = relatedProducts.map((item) => `
     <a class="related-product-card" href="./product.html?id=${encodeURIComponent(item.id)}">
       <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy">
-      <span class="eyebrow">${escapeHtml(item.category)} · ★ ${escapeHtml(item.rating)}</span>
+      <span class="eyebrow">${escapeHtml(item.category)}</span>
       <strong>${escapeHtml(item.name)}</strong>
       <span class="related-product-price">₹${Number(item.price).toLocaleString("en-IN")}</span>
     </a>

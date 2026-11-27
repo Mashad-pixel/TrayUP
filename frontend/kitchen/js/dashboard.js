@@ -3,6 +3,11 @@
   const statuses = ["received","preparing","ready","collected"];
   const pendingRoot = document.getElementById("pending-confirmations");
   const pendingCount = document.getElementById("pending-confirmation-count");
+  const summaryRoot = document.getElementById("summary");
+  const boardRoot = document.getElementById("kitchen-board");
+  const boardError = document.getElementById("board-error");
+  const boardErrorMessage = document.getElementById("board-error-message");
+  const boardSignIn = document.getElementById("board-signin");
   let pendingLoading = false;
   const demoQueue = {
     received: [
@@ -23,17 +28,17 @@
   const clock = setInterval(updateTime, 30000);
   window.addEventListener("pagehide", () => clearInterval(clock));
 
-  function showError(detail) {
-    document.getElementById("summary").textContent = detail;
-    statuses.forEach(status => {
-      const col = document.querySelector('[data-status="' + status + '"]');
-      const heading = col.querySelector("h2");
-      col.textContent = ""; col.appendChild(heading);
-      const p = document.createElement("p");
-      p.className = "empty-state"; p.textContent = detail; col.appendChild(p);
-    });
+  function showError(detail, requiresSignIn) {
+    summaryRoot.hidden = true;
+    boardRoot.hidden = true;
+    boardErrorMessage.textContent = detail;
+    boardSignIn.hidden = !requiresSignIn;
+    boardError.hidden = false;
   }
   function render(queue, readOnly) {
+    summaryRoot.hidden = false;
+    boardRoot.hidden = false;
+    boardError.hidden = true;
     const counts = statuses.map(s => Array.isArray(queue[s]) ? queue[s].length : 0);
     document.getElementById("summary").innerHTML =
       (readOnly ? '<div class="metric"><span>Mode</span><strong>Demo · read only</strong></div>' : "") +
@@ -123,11 +128,13 @@
       const response = await trayApi.get("/kitchen/orders");
       render(response?.data?.queue || {}, false);
     } catch (error) {
-      showError(error.status===401 ? "Please sign in with a kitchen account." :
-        error.status===403 ? "This account does not have kitchen access." :
-        "Unable to load live orders. Retry when the backend is available.");
+      const requiresSignIn = error.status === 401 || error.status === 403;
+      showError(error.status === 401 ? "Please sign in with a kitchen account." :
+        error.status === 403 ? "This account does not have kitchen access." :
+        "Unable to load live orders. Retry when the backend is available.", requiresSignIn);
     }
   }
+  document.getElementById("retry-board").addEventListener("click", load);
   document.getElementById("kitchen-board").addEventListener("click", async event => {
     const button = event.target.closest("[data-next]");
     if (!button || demoMode) return;

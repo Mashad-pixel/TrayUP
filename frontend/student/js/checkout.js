@@ -2,35 +2,41 @@
   document.getElementById("app-header").innerHTML = trayComponents.header();
 
   const cart = trayStorage.get("trayup-cart", []);
+  if (!cart.length) {
+    document.getElementById("checkout-empty-state").hidden = false;
+    document.getElementById("checkout-layout").hidden = true;
+    return;
+  }
   const loginUrl = "./login.html?next=checkout.html";
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
   })[character]);
   const rupees = (value) => `₹${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-  const paidStatuses = new Set(["paid", "captured", "completed", "success"]);
-  const summaryRowStyle = "display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee";
-
-  function confirmationUrl(order) {
-    const data = order?.data || {};
-    const paymentStatus = String(data.payment_status || "").toLowerCase();
-    return paidStatuses.has(paymentStatus)
-      ? `./order-placed-animation.html?receipt=${encodeURIComponent(data.order_number || "Pending")}`
-      : "./confirmation.html";
-  }
-
   // Before the order exists, the total is only an estimate from the cart.
   const estimatedTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const totalEl = document.getElementById("checkout-total");
   const totalNote = document.getElementById("total-note");
   const summaryEl = document.getElementById("summary");
   const paymentOptionsEl = document.getElementById("payment-options");
+  const retryPaymentOptionsButton = document.getElementById("retry-payment-options");
   const paymentPanel = document.getElementById("upi-payment-panel");
+  const checkoutSteps = Array.from(document.querySelectorAll("[data-checkout-step]"));
+
+  function setCheckoutStep(currentStep) {
+    checkoutSteps.forEach((step) => {
+      const stepNumber = Number(step.dataset.checkoutStep);
+      step.classList.toggle("is-current", stepNumber === currentStep);
+      step.classList.toggle("is-complete", stepNumber < currentStep);
+      if (stepNumber === currentStep) step.setAttribute("aria-current", "step");
+      else step.removeAttribute("aria-current");
+    });
+  }
 
   function renderEstimate() {
     totalEl.textContent = rupees(estimatedTotal);
     totalNote.textContent = "Estimate. The server confirms the final amount when you place the order.";
     summaryEl.innerHTML = cart.length
-      ? cart.map((item) => `<div style="${summaryRowStyle}"><span>${item.qty} × ${escapeHtml(item.name)}</span><strong>${rupees(item.price * item.qty)}</strong></div>`).join("")
+      ? cart.map((item) => `<div class="checkout-summary-row"><span>${item.qty} × ${escapeHtml(item.name)}</span><strong>${rupees(item.price * item.qty)}</strong></div>`).join("")
       : `<p style="color:var(--muted)">Your cart is empty</p>`;
   }
 
@@ -38,7 +44,7 @@
   function renderServerOrder(order) {
     totalEl.textContent = rupees(order.total_paise / 100);
     totalNote.textContent = "Confirmed by the server. This is the amount you will be charged.";
-    summaryEl.innerHTML = (order.items || []).map((line) => `<div style="${summaryRowStyle}"><span>${Number(line.quantity)} × ${escapeHtml(line.item_name)}</span><strong>${rupees(line.line_total_paise / 100)}</strong></div>`).join("");
+    summaryEl.innerHTML = (order.items || []).map((line) => `<div class="checkout-summary-row"><span>${Number(line.quantity)} × ${escapeHtml(line.item_name)}</span><strong>${rupees(line.line_total_paise / 100)}</strong></div>`).join("");
   }
 
   renderEstimate();
@@ -119,21 +125,34 @@
   }
 
   async function loadPaymentMethods() {
+    retryPaymentOptionsButton.hidden = true;
+    retryPaymentOptionsButton.disabled = true;
+    paymentMethodsLoaded = false;
+    hasPaymentMethod = false;
+    submitButton.disabled = true;
     paymentOptionsEl.textContent = "Loading payment options…";
     try {
       const response = await trayPayment.getMethods();
       hasPaymentMethod = renderPaymentMethods(response?.data || {});
       paymentMethodsLoaded = true;
       submitButton.disabled = !hasPaymentMethod;
-      if (!hasPaymentMethod) trayNotify("No digital payment methods are available right now.");
+      retryPaymentOptionsButton.hidden = hasPaymentMethod;
     } catch (error) {
-      paymentOptionsEl.innerHTML = error.status === 401
-        ? "<p>Sign in is required to continue to payment.</p>"
-        : '<p role="alert">Could not load payment options. Please refresh and try again.</p>';
-      submitButton.disabled = error.status !== 401;
-      trayNotify(error.message || "Could not load payment options.");
+      paymentMethodsLoaded = false;
+      hasPaymentMethod = false;
+      submitButton.disabled = true;
+      if (error.status === 401) {
+        paymentOptionsEl.innerHTML = `<p role="alert">Sign in is required to continue. <a class="payment-signin" href="${loginUrl}">Sign in</a></p>`;
+      } else {
+        paymentOptionsEl.innerHTML = '<p role="alert">Could not load payment options. Try again when your connection is available.</p>';
+        retryPaymentOptionsButton.hidden = false;
+      }
+    } finally {
+      retryPaymentOptionsButton.disabled = false;
     }
   }
+  retryPaymentOptionsButton.addEventListener("click", loadPaymentMethods);
+  setCheckoutStep(1);
 
   function validatePhone(showError) {
     const valid = trayValidation.phone(phoneInput.value);
@@ -182,7 +201,7 @@
     };
     trayStorage.remove("trayup-cart");
     trayStorage.set("trayup-last-order", saved);
-    window.location.href = confirmationUrl(saved);
+    window.location.href = "./confirmation.html";
   }
 
   function setAppLink(id, uri) {
@@ -196,6 +215,7 @@
   }
 
   function showUpiPayment(data) {
+    setCheckoutStep(2);
     document.getElementById("upi-order-summary").textContent =
       `Order ${data.order_number || serverOrder.order_number} · ${rupees(data.amount_paise / 100)}`;
     setAppLink("open-phonepe", data.phonepe_uri);
@@ -301,6 +321,7 @@
         renderServerOrder(serverOrder);
       }
       orderDetails = details;
+      setCheckoutStep(2);
 
       if (paymentMethod === "sandbox") {
         setBusy(true, "Completing test payment…");

@@ -33,6 +33,17 @@
   gap: 16px;
   align-items: start;
 }
+.kitchen-board-error {
+  margin-bottom: 18px;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(31,42,36,.06);
+}
+.kitchen-board-error h2 { font-size: 20px; }
+.kitchen-board-error p { margin: 8px 0 18px; color: var(--muted); }
+.kitchen-board-error > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .board-column {
   background: #ecefe8;
   border-radius: 12px;

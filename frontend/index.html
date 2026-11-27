@@ -7,22 +7,22 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>TrayUP — College Canteen</title>
-  <link rel="stylesheet" href="./css/global.css?v=search-bar-six-stickers-v1">
-  <link rel="stylesheet" href="./css/components.css?v=genz-home-v1">
-  <link rel="stylesheet" href="./css/student.css?v=roulette-photo-background-v2">
-  <link rel="stylesheet" href="./css/responsive.css?v=mobile-layout-v3">
+  <link rel="stylesheet" href="./css/global.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="./css/components.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="./css/student.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="./css/responsive.css?v=customer-design-system-v8">
 </head>
 <body class="student-page home-page">
   <div id="app-header"></div>
   <main>
-    <section class="menu-hero" aria-label="Popular dishes" aria-roledescription="carousel">
+    <section class="menu-hero" aria-label="Featured dishes" aria-roledescription="carousel">
       <div class="hero-viewport">
         <div class="hero-track" id="hero-track" aria-live="off"></div>
       </div>
-      <div class="hero-controls" aria-label="Popular dish slides">
-        <button type="button" id="hero-previous" aria-label="Show previous popular dish">&lt;</button>
+      <div class="hero-controls" aria-label="Featured dish slides">
+        <button type="button" id="hero-previous" aria-label="Show previous featured dish">&lt;</button>
         <span id="hero-slide-count" aria-hidden="true"></span>
-        <button type="button" id="hero-next" aria-label="Show next popular dish">&gt;</button>
+        <button type="button" id="hero-next" aria-label="Show next featured dish">&gt;</button>
       </div>
     </section>
 
@@ -32,9 +32,32 @@
           <span class="discovery-kicker">GOOD BREAKS START HERE</span>
           <h2>What are you craving?</h2>
         </div>
-        <a href="#popular" class="discovery-link">See the full menu <span aria-hidden="true">↗</span></a>
+        <a href="#popular" class="discovery-link" data-browse-all>See the full menu <span aria-hidden="true">↗</span></a>
       </div>
       <div class="category-rail" id="category-rail" aria-label="Browse food categories"></div>
+      <p class="category-scroll-hint">Swipe to explore categories <span aria-hidden="true">→</span></p>
+    </section>
+
+    <section class="menu-catalog" id="popular" aria-labelledby="menu-heading">
+      <div class="menu-heading">
+        <h2 id="menu-heading">Featured dishes</h2>
+        <p>Explore the menu and choose a campus canteen pickup order.</p>
+      </div>
+      <p class="menu-trust-note">Availability and the final total are confirmed when you place your order.</p>
+      <div class="menu-filters">
+        <select id="availability-filter" aria-label="Filter by availability">
+          <option value="all">All availability</option>
+          <option value="available">Available items</option>
+        </select>
+        <select id="diet-filter" aria-label="Filter by dietary preference">
+          <option value="all">All diets</option>
+          <option value="veg">Veg</option>
+          <option value="nonveg">Non-veg</option>
+          <option value="egg">Egg</option>
+        </select>
+        <button class="btn btn-secondary" id="clear-search" type="button">Clear search</button>
+      </div>
+      <div class="food-grid" id="food-grid" aria-live="polite"></div>
     </section>
 
     <section class="mood-wrap" aria-labelledby="mood-heading">
@@ -57,7 +80,7 @@
       <div class="roulette-copy">
         <span class="discovery-kicker">DECISIONS, DECISIONS</span>
         <h2 id="roulette-heading">Can't pick?<br><em>We'll pick.</em></h2>
-        <p>A little nudge from the menu. Always an actual available dish.</p>
+        <p>A quick way to find something new from the menu.</p>
         <button type="button" class="surprise-button" id="surprise-me">Pick my meal <span aria-hidden="true">✳</span></button>
       </div>
       <div class="roulette-result" id="roulette-result" aria-live="polite">
@@ -66,33 +89,20 @@
       </div>
     </section>
 
-    <section class="menu-catalog" id="popular">
-      <div class="popular-periods" id="popular-periods" aria-label="Popular foods time period" hidden>
-        <span>Top ordered</span>
-        <button type="button" class="active" data-period="day">Today</button>
-        <button type="button" data-period="week">This week</button>
-        <button type="button" data-period="month">This month</button>
-      </div>
-      <div class="menu-filters">
-        <select id="availability-filter" aria-label="Filter by availability">
-          <option value="all">All availability</option>
-          <option value="available">Available now</option>
-        </select>
-        <select id="diet-filter" aria-label="Filter by dietary preference">
-          <option value="all">All diets</option>
-          <option value="veg">Veg</option>
-          <option value="nonveg">Non-veg</option>
-          <option value="egg">Egg</option>
-        </select>
-        <button class="btn btn-secondary" id="clear-search" type="button">Clear search</button>
-      </div>
-      <div class="menu-heading">
-        <h2>Popular today</h2>
-        <p>Freshly prepared at the campus canteen</p>
-      </div>
-      <div class="food-grid" id="food-grid" aria-live="polite"></div>
-    </section>
   </main>
+
+  <footer class="home-site-footer">
+    <div>
+      <a class="home-footer-brand" href="./index.html">trayUP</a>
+      <p>Explore the campus canteen menu and place pickup orders.</p>
+    </div>
+    <nav aria-label="Footer navigation">
+      <a href="#popular" data-browse-all>Browse menu</a>
+      <a href="./student/tracking.html">My orders</a>
+      <a href="./student/login.html">Student sign in</a>
+    </nav>
+    <small>Availability and the final total are confirmed when you place your order.</small>
+  </footer>
 
   <aside class="cart-drawer" id="cart-drawer" aria-label="Shopping cart">
     <div class="cart-head">
@@ -102,13 +112,15 @@
     <div class="cart-items" id="cart-items"></div>
     <div class="cart-foot">
       <div class="cart-total"><span>Subtotal</span><strong id="cart-total">₹0</strong></div>
-      <a class="btn btn-primary" href="./student/checkout.html">Checkout</a>
+      <a class="btn btn-primary" id="drawer-checkout" href="./student/checkout.html">Checkout</a>
     </div>
   </aside>
 
   <nav class="mobile-dock" aria-label="Quick navigation">
-    <a href="#popular"><span aria-hidden="true">⌂</span>Browse</a>
-    <button type="button" data-mobile-cart><span aria-hidden="true">＋</span>Tray</button>
+    <a href="#popular" data-browse-all><span aria-hidden="true">⌂</span>Browse</a>
+    <button type="button" data-mobile-cart aria-label="Open your tray, 0 items">
+      <span aria-hidden="true">＋</span>Tray<span class="mobile-dock-count" data-mobile-cart-count hidden>0</span>
+    </button>
     <a href="./student/tracking.html"><span aria-hidden="true">◎</span>Orders</a>
   </nav>
 
@@ -116,8 +128,8 @@
   <script src="./shared/storage.js"></script>
   <script src="./shared/api.js"></script>
   <script src="./shared/notifications.js"></script>
-  <script src="./shared/components.js?v=genz-home-v5"></script>
-  <script src="./shared/demo-data.js?v=diet-filter-v1"></script>
-  <script src="./student/js/menu.js?v=genz-home-v1"></script>
+  <script src="./shared/components.js?v=featured-nav-v1"></script>
+  <script src="./shared/demo-data.js?v=curated-media-v2"></script>
+  <script src="./student/js/menu.js?v=menu-pro-redesign-v4"></script>
 </body>
 </html>

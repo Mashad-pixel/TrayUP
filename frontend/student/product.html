@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Food details — trayUP</title>
-  <link rel="stylesheet" href="../css/global.css?v=site-background-section-photo-v2">
-  <link rel="stylesheet" href="../css/components.css?v=scattered-doodle-v1">
-  <link rel="stylesheet" href="../css/student.css?v=order-checkout-photo-v3">
-  <link rel="stylesheet" href="../css/responsive.css?v=mobile-layout-v3">
+  <link rel="stylesheet" href="../css/global.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="../css/components.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="../css/student.css?v=customer-design-system-v8">
+  <link rel="stylesheet" href="../css/responsive.css?v=customer-design-system-v8">
 </head>
 <body class="student-page product-detail-page">
   <div id="app-header"></div>
@@ -39,16 +39,24 @@
         <p class="product-description" id="product-description"></p>
         <div class="product-diet"><span id="product-diet-dot" class="product-diet-dot"></span><span id="product-availability"></span></div>
         <p class="product-price" id="product-price"></p>
+        <p class="product-availability-note">Availability and the final total are validated when you place your order.</p>
         <div class="product-actions">
           <button class="btn btn-primary" id="order-product" type="button">Order</button>
           <button class="btn btn-secondary" id="add-product" type="button">Add to cart</button>
         </div>
 
         <div class="product-service-notes">
-          <span>Freshly prepared</span><span>Campus canteen pickup</span>
+          <span>Campus canteen pickup</span>
         </div>
       </div>
     </section>
+    <div class="product-mobile-actions" role="group" aria-label="Product order actions">
+      <div class="product-mobile-price"><span>Price</span><strong id="mobile-product-price"></strong></div>
+      <div>
+        <button class="btn btn-secondary" id="mobile-add-product" type="button">Add to tray</button>
+        <button class="btn btn-primary" id="mobile-order-product" type="button">Order</button>
+      </div>
+    </div>
 
     <section class="related-products" aria-labelledby="related-heading">
       <div class="related-heading">
@@ -81,23 +89,24 @@
             <div><p class="product-detail-kicker">The essentials</p><h3>Ingredients</h3></div>
           </div>
           <span class="ingredient-count" id="product-ingredient-count"></span>
+          <p class="ingredient-safety-note">Recipes can vary. Please confirm ingredients and allergen information with canteen staff.</p>
           <ul class="ingredient-list" id="product-ingredients"></ul>
         </section>
-        <section class="product-detail-section product-recipe-section" id="product-recipe-section" hidden>
-          <div class="product-detail-heading">
+        <details class="product-detail-section product-recipe-section" id="product-recipe-section" hidden>
+          <summary class="product-detail-heading">
             <span class="product-detail-index" aria-hidden="true">03</span>
-            <div><p class="product-detail-kicker">The method</p><h3>Step by step</h3></div>
-          </div>
+            <span class="product-detail-summary-copy"><span class="product-detail-kicker">The method</span><span class="product-detail-summary-title" role="heading" aria-level="3">Step by step</span></span>
+          </summary>
           <ol class="recipe-steps" id="product-recipe-steps"></ol>
-        </section>
-        <section class="product-detail-section product-nutrition-section" id="product-nutrition-section" hidden aria-labelledby="product-nutrition-title">
-          <div class="product-detail-heading">
+        </details>
+        <details class="product-detail-section product-nutrition-section" id="product-nutrition-section" hidden aria-labelledby="product-nutrition-title">
+          <summary class="product-detail-heading">
             <span class="product-detail-index" aria-hidden="true">04</span>
-            <div><p class="product-detail-kicker">The nourishment</p><h3 id="product-nutrition-title">Nutrition per serving</h3></div>
-          </div>
+            <span class="product-detail-summary-copy"><span class="product-detail-kicker">The nourishment</span><span class="product-detail-summary-title" id="product-nutrition-title" role="heading" aria-level="3">Nutrition per serving</span></span>
+          </summary>
           <p class="nutrition-note">Estimated values for one serving. Actual nutrition can vary with ingredients and portion size.</p>
           <dl class="nutrition-facts" id="product-nutrition-facts"></dl>
-        </section>
+        </details>
       </div>
     </section>
 
@@ -124,8 +133,8 @@
   <script src="../shared/storage.js"></script>
   <script src="../shared/api.js"></script>
   <script src="../shared/notifications.js"></script>
-  <script src="../shared/components.js?v=static-doodles-v1"></script>
-  <script src="../shared/demo-data.js?v=nutrition-panel-v1"></script>
-  <script src="./js/product.js?v=ingredient-chips-v1"></script>
+  <script src="../shared/components.js?v=featured-nav-v1"></script>
+  <script src="../shared/demo-data.js?v=curated-media-v2"></script>
+  <script src="./js/product.js?v=product-redesign-v3"></script>
 </body>
 </html>
