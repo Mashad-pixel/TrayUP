@@ -14,13 +14,13 @@ from app.services.errors import OrderError
 from app.services.session_service import revoke_other_sessions
 from app.services.time_utils import utcnow
 
-WRONG_PASSWORD_MESSAGE = "Your current password is not correct."
+INCORRECT_CURRENT_CREDENTIALS_MESSAGE = "The current credentials are not correct."
 
 
 def change_password(user, current_password, new_password):
     """Set a new password. Returns how many other sessions were signed out."""
     if not user.check_password(current_password):
-        raise OrderError("CURRENT_PASSWORD_INCORRECT", WRONG_PASSWORD_MESSAGE, 400)
+        raise OrderError("CURRENT_PASSWORD_INCORRECT", INCORRECT_CURRENT_CREDENTIALS_MESSAGE, 400)
 
     problem = password_problem(new_password)
     if problem:
@@ -37,7 +37,7 @@ def change_password(user, current_password, new_password):
 def change_email(user, current_password, new_email):
     """Change the sign-in email. Returns the normalized new address."""
     if not user.check_password(current_password):
-        raise OrderError("CURRENT_PASSWORD_INCORRECT", WRONG_PASSWORD_MESSAGE, 400)
+        raise OrderError("CURRENT_PASSWORD_INCORRECT", INCORRECT_CURRENT_CREDENTIALS_MESSAGE, 400)
 
     email = normalize_email(new_email)
     if not is_valid_email(email):
