@@ -4,7 +4,7 @@ Every route requires an administrator. Kitchen staff cannot reach any of these.
 """
 
 from flask import Blueprint, jsonify, request
-from flask_login import current_user, login_required
+from flask_login import login_required
 
 from app.models.menu_category import MenuCategory
 from app.models.user import UserRole
@@ -19,13 +19,6 @@ from app.services.category_service import (
     update_category,
 )
 from app.services.errors import OrderError, ServiceValidationError
-from app.services.staff_service import (
-    create_staff,
-    get_staff,
-    list_staff,
-    serialize_staff,
-    update_staff,
-)
 from app.extensions import db
 
 admin_management_bp = Blueprint("admin_management", __name__, url_prefix="/api/admin")
@@ -116,7 +109,8 @@ def categories_delete(category_id):
 @login_required
 @roles_required(UserRole.ADMIN)
 def canteen_settings_show():
-    return jsonify(get_settings()), 200
+    settings = get_settings()
+    return jsonify(**settings, settings=settings), 200
 
 
 @admin_management_bp.patch("/canteen/settings")
@@ -130,49 +124,6 @@ def canteen_settings_update():
         settings = update_details(data)
     except ServiceValidationError as exc:
         return _validation_error(exc.errors)
-    return jsonify(settings), 200
+    return jsonify(**settings, settings=settings), 200
 
 
-# ---------- Staff accounts ----------
-
-@admin_management_bp.get("/staff")
-@login_required
-@roles_required(UserRole.ADMIN)
-def staff_index():
-    return jsonify(staff=[serialize_staff(user) for user in list_staff()]), 200
-
-
-@admin_management_bp.post("/staff")
-@login_required
-@roles_required(UserRole.ADMIN)
-def staff_create():
-    data = _json_object()
-    if data is None:
-        return _invalid_json()
-    try:
-        user = create_staff(data, current_user)
-    except ServiceValidationError as exc:
-        return _validation_error(exc.errors)
-    except OrderError as exc:
-        return _order_error(exc)
-    return jsonify(staff=serialize_staff(user)), 201
-
-
-@admin_management_bp.patch("/staff/<int:user_id>")
-@login_required
-@roles_required(UserRole.ADMIN)
-def staff_update(user_id):
-    try:
-        user = get_staff(user_id)
-    except OrderError as exc:
-        return _order_error(exc)
-    data = _json_object()
-    if data is None:
-        return _invalid_json()
-    try:
-        user = update_staff(user, data, current_user)
-    except ServiceValidationError as exc:
-        return _validation_error(exc.errors)
-    except OrderError as exc:
-        return _order_error(exc)
-    return jsonify(staff=serialize_staff(user)), 200

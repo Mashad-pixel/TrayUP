@@ -7,7 +7,12 @@ from flask.cli import with_appcontext
 from app.extensions import db
 from app.models.menu import MenuItem
 from app.models.user import User, UserRole
-from app.services.order_service import expire_unpaid_orders
+from app.services.order_service import (
+    DEFAULT_EXPIRY_BATCH_SIZE,
+    MAX_EXPIRY_BATCH_SIZE,
+    expire_unpaid_orders,
+    expiry_status,
+)
 from app.services.menu_service import MenuValidationError, create_menu_item, validate_menu_payload
 from app.services.session_service import prune_sessions, revoke_user_sessions
 from app.security.account_rules import is_valid_email, is_valid_name, normalize_email, password_problem
@@ -56,14 +61,36 @@ def create_user_command(name, email, role, password):
 
 
 @click.command("expire-orders")
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Report overdue orders without expiring anything. Exits 1 if the sweep has stalled.",
+)
+@click.option(
+    "--batch-size",
+    type=click.IntRange(1, MAX_EXPIRY_BATCH_SIZE),
+    default=DEFAULT_EXPIRY_BATCH_SIZE,
+    show_default=True,
+    help="Orders expired per database transaction.",
+)
 @with_appcontext
-def expire_orders_command():
+def expire_orders_command(check, batch_size):
     """Cancel unpaid orders whose payment window has closed, and free their stock.
 
     Run this on a schedule (for example every minute) so stock is released even when
-    no new orders are coming in.
+    no new orders are coming in. Use --check from monitoring to see whether it is keeping up.
     """
-    count = expire_unpaid_orders()
+    if check:
+        status = expiry_status()
+        click.echo(f"Overdue unpaid orders: {status['overdue_orders']}")
+        if status["oldest_overdue_minutes"] is not None:
+            click.echo(f"Oldest is {status['oldest_overdue_minutes']:.1f} minute(s) past its payment window.")
+        if status["stalled"]:
+            click.echo("STALLED: overdue orders are not being expired. Check the scheduled job.")
+            raise SystemExit(1)
+        return
+
+    count = expire_unpaid_orders(batch_size=batch_size)
     click.echo(f"Expired {count} unpaid order(s).")
 
 

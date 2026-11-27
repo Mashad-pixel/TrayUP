@@ -17,6 +17,16 @@ def _positive_int_env(name, default):
     return value
 
 
+def validate_rate_limit_storage(config, environment):
+    """Reject process-local rate-limit counters in production deployments."""
+    uri = str(config.get("RATELIMIT_STORAGE_URI", "memory://"))
+    raw_allow_memory = config.get("RATELIMIT_ALLOW_MEMORY", False)
+    allow_memory = raw_allow_memory is True or str(raw_allow_memory).strip().lower() in {"1", "true", "yes", "on"}
+    if str(environment).lower() == "production" and not uri.startswith(("redis://", "rediss://")) and not allow_memory:
+        raise RuntimeError("Production requires a shared rate-limit store (Redis or another shared backend).")
+    return True
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", DEV_SECRET_KEY)
 
@@ -81,6 +91,8 @@ class Config:
     TRUSTED_PROXY_COUNT = max(0, int(os.getenv("TRUSTED_PROXY_COUNT", "0")))
 
     ORDER_PAYMENT_EXPIRY_MINUTES = int(os.getenv("ORDER_PAYMENT_EXPIRY_MINUTES", "10"))
+    # Unpaid orders this far past their payment window mean the expiry sweep has stalled.
+    ORDER_EXPIRY_ALERT_MINUTES = int(os.getenv("ORDER_EXPIRY_ALERT_MINUTES", "15"))
     COLLECTION_TOKEN_EXPIRY_MINUTES = int(os.getenv("COLLECTION_TOKEN_EXPIRY_MINUTES", "60"))
     CANTEEN_UTC_OFFSET_MINUTES = int(os.getenv("CANTEEN_UTC_OFFSET_MINUTES", "330"))
 

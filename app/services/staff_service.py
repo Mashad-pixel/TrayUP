@@ -124,7 +124,7 @@ def update_staff(user, data, actor):
     changes_access = new_role != user.role or new_active != user.is_active
     if user.id == actor.id and changes_access:
         raise OrderError(
-            "SELF_CHANGE_NOT_ALLOWED",
+            "SELF_LOCKOUT",
             "You cannot change your own role or deactivate your own account.",
             409,
         )

@@ -95,12 +95,11 @@ def _confirm_captured_payment(
 
     order = Order.query.filter_by(id=payment.order_id).with_for_update().first()
     if order is None:
+        # The provider captured funds but the linked internal order is missing. Never mark
+        # this payment as a normal success; flag it for manual refund/reconciliation.
         payment.status = PaymentRecordStatus.REFUND_REQUIRED
         payment.provider_payment_id = provider_payment_id
         db.session.commit()
-        committed_order = db.session.get(Order, order.id)
-        if committed_order is not None:
-            sync_order_to_firebase(committed_order)
         return payment, True
 
     # The payment window may have elapsed before the scheduled expiry job ran.

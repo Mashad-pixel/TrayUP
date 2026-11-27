@@ -21,6 +21,8 @@ from app.services.firebase_service import sync_order_to_firebase
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 64
 EXPIRY_NOTE = "Payment not completed in time"
+DEFAULT_EXPIRY_BATCH_SIZE = 100
+MAX_EXPIRY_BATCH_SIZE = 1000
 
 
 def _generate_order_number():
@@ -105,34 +107,79 @@ def expire_order(order, now=None):
     ))
 
 
-def expire_unpaid_orders():
-    """Cancel every unpaid order whose payment window has closed. Returns how many.
-
-    Paid orders are never touched. Runs lazily before each new order, and from the
-    `expire-orders` CLI command. The whole sweep is one transaction, so a failure
-    changes nothing.
-    """
-    now = utcnow()
-    candidates = (
-        Order.query.filter(
-            Order.order_status == OrderStatus.PENDING_PAYMENT,
-            Order.payment_status == PaymentStatus.PENDING,
-        )
-        .with_for_update()
-        .all()
+def _unpaid_pending_orders():
+    return Order.query.filter(
+        Order.order_status == OrderStatus.PENDING_PAYMENT,
+        Order.payment_status == PaymentStatus.PENDING,
     )
 
-    try:
-        expired = 0
-        for order in candidates:
-            if payment_window_closed(order, now):
-                expire_order(order, now)
-                expired += 1
-        db.session.commit()
-        return expired
-    except Exception:
-        db.session.rollback()
-        raise
+
+def expire_unpaid_orders(batch_size=DEFAULT_EXPIRY_BATCH_SIZE):
+    """Cancel every unpaid order whose payment window has closed. Returns how many.
+
+    Orders are processed in batches of `batch_size`. Each batch commits on its own, so a long
+    backlog never holds one large transaction open, and a failure undoes only the batch in
+    progress. Paid orders are never touched. Runs lazily before each new order, and from the
+    `expire-orders` CLI command.
+    """
+    if not isinstance(batch_size, int) or not 1 <= batch_size <= MAX_EXPIRY_BATCH_SIZE:
+        raise ValueError(f"batch_size must be between 1 and {MAX_EXPIRY_BATCH_SIZE}.")
+
+    now = utcnow()
+    expired_total = 0
+    last_id = 0
+    while True:
+        try:
+            batch = (
+                _unpaid_pending_orders()
+                .filter(Order.id > last_id)
+                .order_by(Order.id)
+                .with_for_update()
+                .limit(batch_size)
+                .all()
+            )
+            if not batch:
+                return expired_total
+            last_id = batch[-1].id
+
+            expired_in_batch = 0
+            for order in batch:
+                if payment_window_closed(order, now):
+                    expire_order(order, now)
+                    expired_in_batch += 1
+            db.session.commit()
+            expired_total += expired_in_batch
+        except Exception:
+            db.session.rollback()
+            raise
+
+
+def expiry_status(now=None):
+    """Read-only health check for the expiry sweep. It never changes an order.
+
+    `oldest_overdue_minutes` is how far past its payment window the oldest unpaid order is,
+    or None when nothing is overdue. `stalled` is True once that passes
+    ORDER_EXPIRY_ALERT_MINUTES, which usually means the scheduled sweep is not running.
+    """
+    now = now or utcnow()
+    window = timedelta(minutes=current_app.config["ORDER_PAYMENT_EXPIRY_MINUTES"])
+    alert_minutes = current_app.config["ORDER_EXPIRY_ALERT_MINUTES"]
+
+    overdue_count = 0
+    oldest_minutes = None
+    for (created_at,) in _unpaid_pending_orders().with_entities(Order.created_at).all():
+        past_window = (now - window) - as_utc(created_at)
+        if past_window >= timedelta(0):
+            overdue_count += 1
+            minutes = past_window.total_seconds() / 60
+            if oldest_minutes is None or minutes > oldest_minutes:
+                oldest_minutes = minutes
+
+    return {
+        "overdue_orders": overdue_count,
+        "oldest_overdue_minutes": round(oldest_minutes, 2) if oldest_minutes is not None else None,
+        "stalled": oldest_minutes is not None and oldest_minutes > alert_minutes,
+    }
 
 
 def _sweep_expired_orders_safely():

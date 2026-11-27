@@ -1,0 +1,26 @@
+TrayUP final merge: validation log
+==================================
+
+Source archives:
+- TrayUP-fixed-2.zip
+- TrayUP-errors-3-onward-fixed(1).zip
+
+Passed in this workspace:
+1. `python -m compileall -q app tests`
+2. `node --check` for every JavaScript file under `frontend/` and `tests/frontend/`
+3. `node --test tests/frontend/api-client.test.js tests/frontend/storage-errors.test.js tests/frontend/catalog.test.js`
+   Result: 8 tests passed, 0 failed.
+4. Static Alembic graph check: 17 revisions, one root, one head.
+5. Static admin-management wiring check: blueprint import and registration are present; `get_settings` and `update_details` are defined.
+6. Static stock-reservation migration check: dependent check constraints are dropped before `reserved_quantity` is dropped.
+7. ZIP integrity check after packaging.
+
+Not completed in this workspace:
+- `pytest -q` could not start because Flask is not installed (`ModuleNotFoundError: No module named 'flask'`).
+- The full jsdom browser suite was not run because `jsdom` is not installed in this workspace. The workflow and test instructions install it before running those tests.
+- Render, Vercel, PostgreSQL migration execution, SMTP, Firebase, and Razorpay were not tested against live services or credentials.
+
+Interpretation:
+- Python compilation and JavaScript syntax checks establish that the files parse; they do not prove integration correctness.
+- The migration graph check is static. Back up the database and test migrations against a copy before applying them to production.
+- Verify that `frontend/vercel.json` points to the actual Render service URL before deployment.

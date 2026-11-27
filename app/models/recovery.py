@@ -48,9 +48,10 @@ class RecoveryRequest(db.Model):
     """
 
     __tablename__ = "recovery_requests"
+    __table_args__ = (db.UniqueConstraint("reference", name="uq_recovery_requests_reference"),)
 
     id = db.Column(db.Integer, primary_key=True)
-    reference = db.Column(db.String(20), nullable=False, unique=True)
+    reference = db.Column(db.String(20), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     identifier = db.Column(db.String(120), nullable=False)
     contact_email = db.Column(db.String(120), nullable=False)

@@ -9,9 +9,9 @@ from app.config import DEV_SECRET_KEY, config_map
 from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.models.user import User, UserRole
 from app.routes.admin import admin_bp
-from app.routes.account import account_bp
 from app.routes.admin_orders import admin_orders_bp
 from app.routes.admin_staff import admin_staff_bp
+from app.routes.admin_management import admin_management_bp
 from app.routes.admin_refunds import admin_refunds_bp
 from app.routes.auth import auth_bp
 from app.routes.frontend import frontend_bp
@@ -161,13 +161,13 @@ def create_app(config_name="production"):
     app.register_blueprint(public_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(auth_bp)
-    app.register_blueprint(account_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(admin_orders_bp)
     app.register_blueprint(kitchen_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(admin_refunds_bp)
     app.register_blueprint(admin_staff_bp)
+    app.register_blueprint(admin_management_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(recovery_bp)
 

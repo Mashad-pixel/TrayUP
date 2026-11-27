@@ -45,7 +45,7 @@ def popular_menu():
     period = request.args.get("period", "day")
     if period not in POPULARITY_PERIODS:
         return error_response("INVALID_PERIOD", "period must be day, week or month.", 400)
-    return jsonify(items=popular_menu_items(period)), 200
+    return jsonify(period=period, items=popular_menu_items(period)), 200
 
 
 @public_bp.get("/menu/<int:item_id>")

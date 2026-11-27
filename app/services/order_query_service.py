@@ -1,10 +1,13 @@
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.order_status_history import OrderStatusHistory
 from app.models.user import User
+from sqlalchemy import or_
 from app.services.errors import OrderError
 
 DEFAULT_PER_PAGE = 10
 MAX_PER_PAGE = 50
+# Far beyond any real history, and small enough that offsets stay inside every database's integer range.
+MAX_PAGE = 1_000_000
 
 VALID_ORDER_STATUSES = {
     OrderStatus.PENDING_PAYMENT,
@@ -40,6 +43,12 @@ def parse_pagination(args):
     """Return (page, per_page) from query-string arguments."""
     page = _parse_positive_int(args.get("page"), 1, "page")
     per_page = _parse_positive_int(args.get("per_page"), DEFAULT_PER_PAGE, "per_page")
+
+    if page > MAX_PAGE:
+        raise OrderError(
+            "INVALID_PAGINATION",
+            f"'page' cannot be more than {MAX_PAGE}.",
+        )
 
     if per_page > MAX_PER_PAGE:
         raise OrderError(
@@ -90,8 +99,18 @@ def get_order_for_student(student_id, order_id):
     return Order.query.filter_by(id=order_id, student_id=student_id).first()
 
 
-def list_orders_for_admin(page, per_page, order_status=None, payment_status=None):
+def list_orders_for_admin(page, per_page, order_status=None, payment_status=None, search=None):
     query = Order.query
+    if search:
+        escaped = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        term = f"%{escaped}%"
+        query = query.join(User, User.id == Order.student_id).filter(
+            or_(
+                Order.order_number.ilike(term, escape="\\"),
+                User.name.ilike(term, escape="\\"),
+                User.email.ilike(term, escape="\\"),
+            )
+        )
     if order_status is not None:
         query = query.filter(Order.order_status == order_status)
     if payment_status is not None:

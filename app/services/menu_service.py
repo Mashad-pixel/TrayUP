@@ -5,8 +5,11 @@ from sqlalchemy import func, or_
 
 from app.extensions import db
 from app.models.menu import MenuItem
+from app.models.menu_category import MenuCategory
 from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem
+from app.models.stock_reservation import ReservationStatus, StockReservation
+from app.services.errors import OrderError
 from app.services.time_utils import utcnow
 from app.security.url_rules import image_url_problem
 
@@ -104,6 +107,12 @@ def validate_menu_payload(data, partial=False):
 
     if "category" in data:
         cleaned["category"] = _text("category", data["category"], CATEGORY_MAX_LENGTH, errors)
+        # Existing installations may have menu items before category management was enabled.
+        # Once at least one managed category exists, require new/changed items to use one.
+        if cleaned.get("category") and MenuCategory.query.first() is not None:
+            exists = MenuCategory.query.filter(func.lower(MenuCategory.name) == cleaned["category"].lower()).first()
+            if exists is None:
+                errors["category"] = "Choose an existing menu category."
     elif not partial:
         errors["category"] = "This field is required."
 
@@ -220,12 +229,13 @@ def serialize_public_menu_item(item):
 def list_public_menu_items():
     return (
         MenuItem.query
+        .outerjoin(MenuCategory, func.lower(MenuCategory.name) == func.lower(MenuItem.category))
         .filter(MenuItem.is_available.is_(True))
         .filter(or_(
             MenuItem.stock_quantity.is_(None),
             MenuItem.stock_quantity > MenuItem.reserved_quantity,
         ))
-        .order_by(MenuItem.category, MenuItem.name, MenuItem.id)
+        .order_by(func.coalesce(MenuCategory.sort_order, 10000), MenuItem.category, MenuItem.name, MenuItem.id)
         .all()
     )
 
@@ -236,6 +246,38 @@ def create_menu_item(data):
     db.session.add(item)
     db.session.commit()
     return item
+
+
+def delete_menu_item(item):
+    """Remove a menu item and return its id. Refused while stock is held for an unpaid order.
+
+    Past order lines keep their name and price, with the menu link cleared. Finished stock
+    rows (sold or released) are removed along with the item.
+    """
+    held = StockReservation.query.filter_by(
+        menu_item_id=item.id,
+        status=ReservationStatus.RESERVED,
+    ).first()
+    if held is not None or (item.reserved_quantity or 0) > 0:
+        raise OrderError(
+            "MENU_ITEM_IN_USE",
+            "Stock is held for an unpaid order for this item. Delete it after that order is paid or expires.",
+            409,
+        )
+
+    item_id = item.id
+    try:
+        OrderItem.query.filter_by(menu_item_id=item_id).update(
+            {OrderItem.menu_item_id: None},
+            synchronize_session=False,
+        )
+        StockReservation.query.filter_by(menu_item_id=item_id).delete(synchronize_session=False)
+        db.session.delete(item)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return item_id
 
 
 def update_menu_item(item, data):

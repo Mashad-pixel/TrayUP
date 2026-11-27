@@ -3,7 +3,7 @@
 
 trayUP is a mobile-first web application for college canteens. Students scan a QR code to browse the menu, place food orders, pay online, and track preparation. Kitchen staff manage incoming paid orders and verify collection, while administrators manage menu items, staff, orders, and sales.
 
-> **Project Status:** Development roadmap / planned implementation. Features described below should be treated as planned until they have been implemented and tested.
+> **Project Status:** Active development prototype. The repository contains the Flask API, static frontend, PostgreSQL migrations, student ordering, Razorpay payment verification, kitchen preparation and QR collection workflows, and administrator tools. Production readiness still requires live provider credentials and end-to-end verification.
 
 ## Table of Contents
 
@@ -81,7 +81,7 @@ trayUP aims to solve these problems through a centralized digital ordering and k
 
 - Allow students to open the menu by scanning a QR code.
 - Display current food prices and availability.
-- Allow students to place orders without requiring an account in the first release.
+- Require student sign-in before placing an order; guest checkout is not part of the current authenticated-order implementation.
 - Calculate the final order amount securely on the backend.
 - Accept online payments through Razorpay.
 - Send only verified, captured paid orders to the kitchen.
@@ -186,7 +186,7 @@ Public staff registration should not be enabled. Administrators should create st
 
 ### Initial Implementation Choices
 
-- Use guest checkout for students in the first release.
+- Require a signed-in student account for order creation and payment.
 - Use secure sessions and role-based authorization for staff.
 - Use short-interval polling for order updates initially.
 - Consider WebSockets after the core workflow is stable.
@@ -407,58 +407,71 @@ Order fulfilment and payment must be tracked independently.
 
 | Status | Meaning |
 |---|---|
-| PENDING_PAYMENT | Waiting for successful payment confirmation |
-| RECEIVED | Payment captured; order accepted for kitchen processing |
-| PREPARING | Kitchen is preparing the order |
-| READY | Order is ready for collection |
-| COLLECTED | Food has been handed over |
-| CANCELLED | Order will not be fulfilled |
+| `pending_payment` | Waiting for successful payment confirmation |
+| `received` | Payment captured; order accepted for kitchen processing |
+| `preparing` | Kitchen is preparing the order |
+| `ready` | Order is ready for collection |
+| `collected` | Food has been handed over |
+| `cancelled` | Order will not be fulfilled |
 
 ### Payment Status
 
 | Status | Meaning |
 |---|---|
-| UNPAID | No captured payment |
-| PAID | Payment captured and confirmed |
-| REFUND_PENDING | Refund request initiated |
-| REFUNDED | Refund confirmed |
+| `pending` | No captured payment yet |
+| `paid` | Payment captured and confirmed |
+| `failed` | Payment failed |
+| `refunded` | Full refund confirmed |
+| `partially_refunded` | Partial refund confirmed |
 
-Individual payment attempts should additionally record gateway states such as CREATED, AUTHORIZED, CAPTURED, and FAILED.
+Individual payment attempts additionally record gateway states such as created, authorized, captured, and failed.
 
 Never mark an order as paid merely because the browser reports a successful Checkout callback. Confirm the payment through trusted backend verification and gateway state.
 
 ## 11. API Overview
 
+The current application uses authenticated student order ownership, staff role checks, administrator MFA, and CSRF protection for browser state-changing requests. The main routes are:
+
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
-| GET | /api/menu | Public | List available menu items |
-| GET | /api/canteen/status | Public | Get canteen ordering status |
-| POST | /api/orders | Public | Create an order |
-| GET | /api/orders/{id} | Tracking token | Get order details and status |
-| POST | /api/orders/{id}/payment-order | Order owner | Create Razorpay order |
-| POST | /api/payments/verify | Payment flow | Verify Checkout response |
-| POST | /api/payments/webhook | Razorpay | Receive gateway events |
-| POST | /api/auth/login | Staff | Staff login |
-| POST | /api/auth/logout | Staff | Staff logout |
-| GET | /api/staff/orders | Kitchen/Admin | Fetch active kitchen orders |
-| PATCH | /api/staff/orders/{id}/status | Kitchen/Admin | Update preparation status |
-| POST | /api/staff/collection/preview | Kitchen/Admin | Validate scanned token |
-| POST | /api/staff/collection/confirm | Kitchen/Admin | Confirm handover |
-| GET | /api/admin/menu | Admin | List all menu items |
-| POST | /api/admin/menu | Admin | Create menu item |
-| PATCH | /api/admin/menu/{id} | Admin | Update menu item |
-| GET | /api/admin/orders | Admin | Search and view orders |
-| GET | /api/admin/reports | Admin | View reports |
-| POST | /api/admin/staff | Admin | Create staff account |
-| PATCH | /api/admin/staff/{id} | Admin | Update or disable staff account |
+| GET | `/api/health` | Public | Application/database health |
+| GET | `/api/csrf-token` | Public | Obtain browser CSRF token |
+| GET | `/api/menu` | Public | List available menu items |
+| GET | `/api/menu/popular` | Public | Get popular items |
+| GET | `/api/canteen/status` | Public | Read order-acceptance status |
+| POST | `/api/auth/register` | Public | Register a student account |
+| POST | `/api/auth/login` | Public | Sign in |
+| POST | `/api/auth/logout` | Authenticated | Revoke current session |
+| POST | `/api/orders` | Student | Create an order |
+| GET | `/api/orders` | Student | List the signed-in student's orders |
+| GET | `/api/orders/{id}` | Order owner | Retrieve own order details |
+| GET | `/api/orders/{id}/tracking` | Order owner | Retrieve own order status |
+| GET | `/api/orders/{id}/collection-qr` | Order owner | Retrieve collection QR token |
+| POST | `/api/payments/create-order` | Student | Create Razorpay order |
+| POST | `/api/payments/verify` | Student | Verify Razorpay Checkout payment |
+| POST | `/api/payments/webhook` | Razorpay | Receive signed gateway events |
+| GET | `/api/kitchen/orders` | Kitchen | Fetch active paid orders |
+| PATCH | `/api/kitchen/orders/{id}/status` | Kitchen | Update preparation status |
+| POST | `/api/kitchen/collection/verify` | Kitchen | Validate scanned collection token |
+| POST | `/api/kitchen/collection/confirm` | Kitchen | Confirm handover |
+| GET/POST/PATCH | `/api/admin/menu` | Admin | List, create and update menu items |
+| GET/POST | `/api/admin/categories` | Admin | List and create categories |
+| PATCH/DELETE | `/api/admin/categories/{id}` | Admin | Update or delete categories |
+| GET/PATCH | `/api/admin/canteen/settings` | Admin | Manage canteen name and hours |
+| PATCH | `/api/admin/canteen/status` | Admin | Open or close ordering |
+| GET | `/api/admin/orders` | Admin | Search, filter and paginate orders |
+| POST | `/api/admin/staff` | Admin | Create staff account |
+| PATCH | `/api/admin/staff/{id}` | Admin | Update or disable staff account |
+| GET | `/api/admin/reports/overview` | Admin | Reporting summary |
+| GET | `/api/admin/reports/sales` | Admin | Sales report |
 
-Student order tracking must require a private token or another appropriate ownership mechanism. A guessable order ID must not grant access to personal order information.
+Order IDs are scoped to the authenticated student. A guessed order ID does not grant access to another student's data.
 
 ## 12. Payment Integration
 
 ### 12.1 Payment Provider
 
-trayUP is planned to use Razorpay Standard Checkout.
+trayUP uses Razorpay Standard Checkout. The backend creates the gateway order, verifies the payment signature and captured state, and only then releases the order to the kitchen.
 
 Use Razorpay Test Mode during development. Test transactions do not transfer real money.
 
@@ -821,21 +834,21 @@ Test on Android, iOS, tablet, and desktop browsers. Test slow connections, lost 
 
 Free hosting plans may have sleep limits, storage limits, request limits, or non-persistent filesystems. Do not assume a free plan is suitable for real transactional canteen operations. Verify the provider's current terms and use persistent production storage.
 
-## 21. Development Roadmap
+## 21. Remaining Validation and Future Improvements
 
-Build in this order so later modules depend on stable earlier modules.
+The main application workflows are implemented in the current repository. Use this list to prioritize remaining validation and future improvements, not as a claim that the features below are absent.
 
 | Phase | Work | Completion Condition |
 |---|---|---|
-| 1 | Flask foundation and database | Application starts and migrations work |
-| 2 | Database models and admin menu | Admin can manage menu and availability |
-| 3 | Student menu and cart | Student can build an order on mobile |
-| 4 | Order and pricing engine | Backend calculates trusted totals |
-| 5 | Razorpay integration | Captured payment is verified and recorded |
-| 6 | Kitchen dashboard | Paid orders appear and statuses update |
-| 7 | Tracking and collection QR | Valid orders can be collected exactly once |
-| 8 | Inventory and reports | Stock and sales records are consistent |
-| 9 | Security and testing | Critical workflow and abuse tests pass |
+| 1 | Clean-install verification | Application starts and the full migration chain upgrades a fresh database |
+| 2 | Admin management validation | Categories, canteen settings, staff and menu operations pass API/UI tests |
+| 3 | Student ordering validation | Authenticated students can build and submit an order on mobile |
+| 4 | Order and pricing validation | Backend calculates trusted totals and preserves idempotency |
+| 5 | Razorpay production configuration | Captured payment is verified and recorded with live credentials |
+| 6 | Kitchen workflow validation | Paid orders appear and preparation statuses update |
+| 7 | Tracking and collection validation | Valid orders can be collected exactly once |
+| 8 | Inventory and reports validation | Stock and sales records are consistent |
+| 9 | End-to-end security testing | Critical workflow and abuse tests pass |
 | 10 | Deployment and pilot | Production setup is verified with canteen staff |
 
 ### First-Release Scope
@@ -844,7 +857,7 @@ Prioritize:
 
 - QR-based menu access.
 - Menu and availability management.
-- Guest ordering.
+- Student account sign-in and authenticated ordering.
 - Server-side pricing.
 - Razorpay Test Mode integration.
 - Payment verification and webhooks.
@@ -854,7 +867,7 @@ Prioritize:
 - Basic admin reports.
 - Security and automated tests.
 
-Defer student accounts, loyalty points, coupons, college ID integration, multi-canteen support, advanced inventory, AI recommendations, and native mobile applications.
+Defer loyalty points, coupons, college ID integration, multi-canteen support, advanced inventory, AI recommendations, and native mobile applications. Guest checkout is not currently supported; students must sign in before ordering.
 
 ## 22. Success Metrics
 
@@ -930,29 +943,32 @@ The Flask application and its SQL database run on Render. The static frontend is
 ### Render
 
 1. In Render, choose **New → Blueprint** and connect this repository, `Mashad-pixel/TrayUP`, branch `main`.
-2. Render reads `render.yaml` from the repository root and creates the Flask web service and PostgreSQL database.
-3. Open the web service's **Environment** settings and add the Razorpay secrets:
+2. Set Render's **Root Directory** to the folder that contains `wsgi.py`, `requirements.txt`, `render.yaml`, and `app/`. If those files are at the Git repository root, leave Root Directory blank (or `.`). If the repository has an outer `TrayUP/` folder containing them, set it to `TrayUP`. Do not set it to `app/`: `app/` is the Flask package, not the deployment root.
+3. Render reads `render.yaml` from that project root and creates the Flask web service and PostgreSQL database.
+4. Open the web service's **Environment** settings and add the Razorpay secrets:
    - `RAZORPAY_KEY_ID`
    - `RAZORPAY_KEY_SECRET`
    - `RAZORPAY_WEBHOOK_SECRET`
-4. Under **Secret Files**, upload your newly generated Firebase service-account JSON as `serviceAccountKey.json`. The blueprint expects it at `/etc/secrets/serviceAccountKey.json`. Never commit this file.
-5. Wait for the deploy to finish, then check `https://YOUR-RENDER-SERVICE.onrender.com/api/health`.
-6. Create the first admin using the project's Flask CLI command documented in the Administration section below (or run `flask --app wsgi:app create-user ...` in the Render Shell if that command is available in the deployed version).
+5. Add SMTP settings (`MAIL_HOST`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and `MAIL_FROM`) if password-recovery email must work.
+6. Firebase is optional and disabled by default. Only set `FIREBASE_ENABLED=true` after adding `FIREBASE_DATABASE_URL` and the Firebase service-account JSON as a Render Secret File at `/etc/secrets/serviceAccountKey.json`. Never commit that file.
+7. Wait for the deploy to finish, then check `https://YOUR-RENDER-SERVICE.onrender.com/api/health`.
+8. Create the first admin with `flask --app wsgi:app create-user --name "Canteen Admin" --email admin@example.com --role ADMIN` in the Render Shell. The CLI prompts for the password.
 
 **Database note:** the included Blueprint uses Render's free PostgreSQL plan for a demo deployment. Free Render databases are temporary and expire according to Render's current free-database policy. Do not use this database for permanent canteen orders or real payments. For production, change the database plan in `render.yaml` to a currently available paid persistent plan before deploying.
 
 ### Vercel
 
 1. In Vercel, choose **Add New → Project** and import `Mashad-pixel/TrayUP`.
-2. Set **Root Directory** to `frontend`.
-3. Deploy the project. Vercel serves the static HTML/CSS/JavaScript from this folder.
-4. The file `frontend/vercel.json` proxies `/api/*` to `https://trayup-mashad-api.onrender.com/api/*`. If Render assigns a different service hostname, update the destination in `frontend/vercel.json` to the exact Render URL and redeploy Vercel.
+2. Set **Framework Preset** to **Other** and **Root Directory** to the folder containing the frontend. Use `frontend` if it is at the repository root, or `TrayUP/frontend` if nested inside `TrayUP/`.
+3. Leave Build Command and Install Command blank. Set **Output Directory** to `.`.
+4. Deploy the project. Vercel serves the static HTML/CSS/JavaScript from this folder.
+5. The file `frontend/vercel.json` proxies `/api/*` to `https://trayup-mashad-api.onrender.com/api/*`. If Render assigns a different service hostname, update the destination in `frontend/vercel.json` to the exact Render URL and redeploy Vercel.
 
 ### Required post-deployment checks
 
 - Confirm the Render `/api/health` endpoint reports both application and database healthy.
 - In Vercel, test student menu loading, login/logout, admin and kitchen access, checkout, Razorpay test payment, webhook verification, and order status updates.
-- In Firebase Console, verify that only the intended minimal order mirror is written.
+- If Firebase is enabled, verify that only the intended minimal order mirror is written.
 - Configure the Razorpay webhook URL to the Render service's payment webhook endpoint shown by the application; use HTTPS and the exact route implemented in the payment routes.
-- Keep the Firebase service-account key, Flask secret, and Razorpay secrets only in Render environment/secret-file settings, never in GitHub or Vercel.
+- Keep SMTP credentials, the Flask secret, and Razorpay secrets only in Render environment settings. Keep any Firebase service-account key only in Render Secret Files. Never commit credentials or place private secrets in Vercel.
 
