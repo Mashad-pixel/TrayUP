@@ -38,6 +38,7 @@ def student(app):
     user = User(
         name="Test Student",
         email="student@test.com",
+        mobile_number="+919876500001",
         role="STUDENT",
         is_active=True,
     )

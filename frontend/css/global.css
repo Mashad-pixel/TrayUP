@@ -4,12 +4,12 @@
 
 html {
   min-height: 100%;
-  background-color: #d3c0a7;
-  background-image: url("../assets/linen-texture.png");
-  background-repeat: no-repeat;
+  background-color: #f5f1e8;
+  background-image: url("../assets/site-food-background.png");
   background-position: center;
   background-size: cover;
-  background-attachment: scroll;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 body {
@@ -387,6 +387,7 @@ body.home-page {
 }
 .home-page .search-placeholder {
   color: #5b3d29;
+  font-family: "Chewy", "Comic Sans MS", cursive;
   font-size: 24px;
   letter-spacing: .3px;
 }

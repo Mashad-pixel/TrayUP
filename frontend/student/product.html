@@ -7,12 +7,12 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Food details — trayUP</title>
-  <link rel="stylesheet" href="../css/global.css?v=premium-static-doodle-v3">
+  <link rel="stylesheet" href="../css/global.css?v=site-background-section-photo-v2">
   <link rel="stylesheet" href="../css/components.css?v=scattered-doodle-v1">
-  <link rel="stylesheet" href="../css/student.css?v=scattered-doodle-v1">
+  <link rel="stylesheet" href="../css/student.css?v=order-checkout-photo-v3">
   <link rel="stylesheet" href="../css/responsive.css?v=mobile-layout-v3">
 </head>
-<body class="student-page">
+<body class="student-page product-detail-page">
   <div id="app-header"></div>
   <main class="container product-page">
     <nav class="product-breadcrumb" aria-label="Breadcrumb">
@@ -63,22 +63,40 @@
 
     <section class="product-story" aria-labelledby="dish-guide-title">
       <div class="product-story-heading">
-        <p class="eyebrow">The story behind the plate</p>
-        <h2 id="dish-guide-title">About <span id="story-product-name"></span></h2>
+        <p class="eyebrow">The dish, up close</p>
+        <h2 id="dish-guide-title">From kitchen to plate: <span id="story-product-name"></span></h2>
         <p id="product-history"></p>
       </div>
       <div class="product-story-grid">
-        <section class="product-detail-section">
-          <h3>How it is made</h3>
+        <section class="product-detail-section product-preparation-section">
+          <div class="product-detail-heading">
+            <span class="product-detail-index" aria-hidden="true">01</span>
+            <div><p class="product-detail-kicker">Preparation</p><h3>Made with care</h3></div>
+          </div>
           <p id="product-preparation"></p>
         </section>
-        <section class="product-detail-section">
-          <h3>Ingredients</h3>
+        <section class="product-detail-section product-ingredients-section">
+          <div class="product-detail-heading">
+            <span class="product-detail-index" aria-hidden="true">02</span>
+            <div><p class="product-detail-kicker">The essentials</p><h3>Ingredients</h3></div>
+          </div>
+          <span class="ingredient-count" id="product-ingredient-count"></span>
           <ul class="ingredient-list" id="product-ingredients"></ul>
         </section>
         <section class="product-detail-section product-recipe-section" id="product-recipe-section" hidden>
-          <h3>Step-by-step recipe</h3>
+          <div class="product-detail-heading">
+            <span class="product-detail-index" aria-hidden="true">03</span>
+            <div><p class="product-detail-kicker">The method</p><h3>Step by step</h3></div>
+          </div>
           <ol class="recipe-steps" id="product-recipe-steps"></ol>
+        </section>
+        <section class="product-detail-section product-nutrition-section" id="product-nutrition-section" hidden aria-labelledby="product-nutrition-title">
+          <div class="product-detail-heading">
+            <span class="product-detail-index" aria-hidden="true">04</span>
+            <div><p class="product-detail-kicker">The nourishment</p><h3 id="product-nutrition-title">Nutrition per serving</h3></div>
+          </div>
+          <p class="nutrition-note">Estimated values for one serving. Actual nutrition can vary with ingredients and portion size.</p>
+          <dl class="nutrition-facts" id="product-nutrition-facts"></dl>
         </section>
       </div>
     </section>
@@ -107,7 +125,7 @@
   <script src="../shared/api.js"></script>
   <script src="../shared/notifications.js"></script>
   <script src="../shared/components.js?v=static-doodles-v1"></script>
-  <script src="../shared/demo-data.js?v=dish-guide-v3"></script>
-  <script src="./js/product.js?v=dish-guide-v2"></script>
+  <script src="../shared/demo-data.js?v=nutrition-panel-v1"></script>
+  <script src="./js/product.js?v=ingredient-chips-v1"></script>
 </body>
 </html>

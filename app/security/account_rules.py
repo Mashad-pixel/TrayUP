@@ -19,6 +19,26 @@ def is_valid_email(email):
     return len(email) <= MAX_EMAIL_LENGTH and _EMAIL_PATTERN.fullmatch(email) is not None
 
 
+def normalize_mobile_number(raw_mobile_number):
+    """Normalize an Indian mobile number to E.164 format, or return None."""
+    if not isinstance(raw_mobile_number, str):
+        return None
+
+    value = raw_mobile_number.strip()
+    if not re.fullmatch(r"\+?[\d()\s-]+", value):
+        return None
+
+    digits = re.sub(r"\D", "", value)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+
+    if re.fullmatch(r"[6-9]\d{9}", digits):
+        return f"+91{digits}"
+    return None
+
+
 def is_valid_name(name):
     return 0 < len(name) <= MAX_NAME_LENGTH
 

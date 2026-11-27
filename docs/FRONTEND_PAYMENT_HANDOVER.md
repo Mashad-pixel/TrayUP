@@ -14,12 +14,20 @@ Before running the server locally on this branch, perform the following two comm
 # 1. Install updated dependencies (added pure-Python qrcode library)
 pip install -r requirements.txt
 
-# 2. Apply database migrations (adds payment_provider, upi_vpa, cash settings, and utr_number)
+# 2. Apply database migrations (includes student mobile sign-in support)
 flask --app run.py db upgrade
 
 # 3. (Optional) Seed demo menu items and demo student/kitchen/admin accounts
-flask --app run.py seed-demo
+flask --app run.py seed-demo --student-mobile <your-mobile-number>
 ```
+
+Existing student accounts need a mobile number assigned before they can use mobile sign-in:
+
+```powershell
+flask --app run.py set-user-mobile --email <student-email> --mobile <your-mobile-number>
+```
+
+New student accounts use a mobile number and password; email is not part of student signup.
 
 ### Environment Variables (.env)
 The system works out-of-the-box with **Sandbox & Soundbox enabled**. If configuring PhonePe or UPI VPA:

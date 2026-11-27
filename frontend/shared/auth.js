@@ -3,6 +3,9 @@
     async login(email, password) {
       return trayApi.post("/auth/login", { email, password });
     },
+    async loginWithMobile(mobile, password) {
+      return trayApi.post("/auth/login", { mobile, password });
+    },
     async currentUser() {
       return trayApi.get("/auth/me");
     },

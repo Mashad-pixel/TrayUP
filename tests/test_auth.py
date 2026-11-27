@@ -2,11 +2,12 @@ from app.extensions import db
 from app.models.user import User
 
 STUDENT_EMAIL = "student@test.com"
+STUDENT_MOBILE = "+919876500001"
 STUDENT_PASSWORD = "StrongPass123!"
 
 
-def login(client, email=STUDENT_EMAIL, password=STUDENT_PASSWORD):
-    return client.post("/api/auth/login", json={"email": email, "password": password})
+def login(client, mobile=STUDENT_MOBILE, password=STUDENT_PASSWORD):
+    return client.post("/api/auth/login", json={"mobile": mobile, "password": password})
 
 
 def test_login_success_starts_session(anon_client, student):
@@ -16,15 +17,17 @@ def test_login_success_starts_session(anon_client, student):
     body = response.get_json()
     assert body["success"] is True
     assert body["data"]["email"] == STUDENT_EMAIL
+    assert body["data"]["mobile_number"] == STUDENT_MOBILE
     assert "password_hash" not in body["data"]
 
     me = anon_client.get("/api/auth/me")
     assert me.status_code == 200
     assert me.get_json()["data"]["role"] == "STUDENT"
+    assert me.get_json()["data"]["mobile_number"] == STUDENT_MOBILE
 
 
-def test_email_is_case_and_space_insensitive(anon_client, student):
-    response = login(anon_client, email="  STUDENT@test.com ")
+def test_mobile_number_format_is_normalized(anon_client, student):
+    response = login(anon_client, mobile=" +91 98765 00001 ")
 
     assert response.status_code == 200
 
@@ -36,27 +39,33 @@ def test_wrong_password_is_rejected(anon_client, student):
     assert response.get_json()["error"]["code"] == "INVALID_CREDENTIALS"
 
 
-def test_unknown_email_gives_same_error_as_wrong_password(anon_client, student):
-    response = login(anon_client, email="nobody@test.com")
+def test_unknown_mobile_gives_same_error_as_wrong_password(anon_client, student):
+    response = login(anon_client, mobile="+919876500002")
 
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "INVALID_CREDENTIALS"
 
 
 def test_inactive_user_cannot_login(anon_client, app):
-    user = User(name="Old Account", email="old@test.com", role="STUDENT", is_active=False)
+    user = User(
+        name="Old Account",
+        email="old@test.com",
+        mobile_number="+919876500003",
+        role="STUDENT",
+        is_active=False,
+    )
     user.set_password(STUDENT_PASSWORD)
     db.session.add(user)
     db.session.commit()
 
-    response = login(anon_client, email="old@test.com")
+    response = login(anon_client, mobile="+919876500003")
 
     assert response.status_code == 401
     assert response.get_json()["error"]["code"] == "INVALID_CREDENTIALS"
 
 
 def test_missing_fields_are_rejected(anon_client, student):
-    response = anon_client.post("/api/auth/login", json={"email": STUDENT_EMAIL})
+    response = anon_client.post("/api/auth/login", json={"mobile": STUDENT_MOBILE})
 
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "MISSING_FIELDS"
@@ -92,7 +101,7 @@ def test_real_login_can_create_order(anon_client, student, menu):
 def test_login_returns_csrf_token_for_next_requests(anon_client, student):
     response = anon_client.post(
         "/api/auth/login",
-        json={"email": "student@test.com", "password": "StrongPass123!"},
+        json={"mobile": STUDENT_MOBILE, "password": "StrongPass123!"},
     )
 
     assert response.status_code == 200
@@ -101,12 +110,12 @@ def test_login_returns_csrf_token_for_next_requests(anon_client, student):
 
 
 
-def test_registration_creates_student_and_ignores_requested_role(anon_client):
+def test_registration_creates_mobile_only_student_and_ignores_requested_role(anon_client):
     response = anon_client.post(
         "/api/auth/register",
         json={
             "name": "New Student",
-            "email": "  NEW@student.test ",
+            "mobile": "9876500004",
             "password": "StrongPass123!",
             "role": "ADMIN",
         },
@@ -114,9 +123,11 @@ def test_registration_creates_student_and_ignores_requested_role(anon_client):
     assert response.status_code == 201
     data = response.get_json()["data"]
     assert data["role"] == "STUDENT"
-    assert data["email"] == "new@student.test"
+    assert data["email"] is None
+    assert data["mobile_number"] == "+919876500004"
     assert isinstance(data["csrf_token"], str)
-    user = User.query.filter_by(email="new@student.test").one()
+    user = User.query.filter_by(mobile_number="+919876500004").one()
+    assert user.mobile_number == "+919876500004"
     assert user.role == "STUDENT"
     assert user.check_password("StrongPass123!")
     assert anon_client.get("/api/auth/me").get_json()["data"]["role"] == "STUDENT"
@@ -125,18 +136,64 @@ def test_registration_creates_student_and_ignores_requested_role(anon_client):
 def test_registration_rejects_weak_password(anon_client):
     response = anon_client.post(
         "/api/auth/register",
-        json={"name": "New Student", "email": "weak@test.com", "password": "password"},
+        json={
+            "name": "New Student",
+            "mobile": "9876500005",
+            "password": "password",
+        },
     )
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "INVALID_REGISTRATION"
-    assert User.query.filter_by(email="weak@test.com").count() == 0
+    assert User.query.filter_by(mobile_number="+919876500005").count() == 0
 
 
-def test_registration_rejects_duplicate_email_case_insensitively(anon_client, student):
+def test_student_email_login_is_rejected(anon_client, student):
+    response = anon_client.post(
+        "/api/auth/login",
+        json={"email": STUDENT_EMAIL, "password": STUDENT_PASSWORD},
+    )
+
+    assert response.status_code == 401
+    assert response.get_json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+
+def test_staff_can_still_login_with_email(anon_client, app):
+    staff = User(name="Admin", email="admin@test.com", role="ADMIN", is_active=True)
+    staff.set_password(STUDENT_PASSWORD)
+    db.session.add(staff)
+    db.session.commit()
+
+    response = anon_client.post(
+        "/api/auth/login",
+        json={"email": staff.email, "password": STUDENT_PASSWORD},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["role"] == "ADMIN"
+
+
+def test_registration_requires_mobile_number(anon_client, student):
     response = anon_client.post(
         "/api/auth/register",
-        json={"name": "Duplicate", "email": " STUDENT@Test.com ", "password": "StrongPass123!"},
+        json={
+            "name": "New Student",
+            "password": "StrongPass123!",
+        },
     )
+
+    assert response.status_code == 400
+    assert User.query.count() == 1
+
+
+def test_registration_rejects_duplicate_mobile_number(anon_client, student):
+    response = anon_client.post(
+        "/api/auth/register",
+        json={
+            "name": "Duplicate",
+            "mobile": "9876500001",
+            "password": "StrongPass123!",
+        },
+    )
+
     assert response.status_code == 409
-    assert response.get_json()["error"]["code"] == "EMAIL_UNAVAILABLE"
-    assert User.query.filter_by(email=STUDENT_EMAIL).count() == 1
+    assert response.get_json()["error"]["code"] == "MOBILE_UNAVAILABLE"

@@ -142,6 +142,21 @@
     return valid;
   }
 
+  async function prefillStudentDetails() {
+    try {
+      const response = await trayAuth.currentUser();
+      const student = response?.data;
+      if (String(student?.role || "").toUpperCase() !== "STUDENT") return;
+      nameInput.value = student.name || "";
+      phoneInput.value = student.mobile_number || "";
+      validatePhone(false);
+    } catch (error) {
+      if (error.status !== 401) {
+        trayNotify(error.message || "Could not load your account details.");
+      }
+    }
+  }
+
   nameInput.addEventListener("input", () => nameInput.removeAttribute("aria-invalid"));
   phoneInput.addEventListener("blur", () => validatePhone(true));
   phoneInput.addEventListener("input", () => {
@@ -342,5 +357,6 @@
     }
   });
 
+  prefillStudentDetails();
   loadPaymentMethods();
 })();

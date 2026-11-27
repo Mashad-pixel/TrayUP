@@ -140,6 +140,52 @@
     43: ["Packaged drinking water"]
   };
 
+  const nutritionByProduct = {
+    1: { energy: 320, protein: 8, carbohydrates: 48, fat: 10, fiber: 4, sugars: 4, sodium: 650 },
+    2: { energy: 250, protein: 9, carbohydrates: 45, fat: 3, fiber: 7, sugars: 5, sodium: 700 },
+    3: { energy: 460, protein: 8, carbohydrates: 66, fat: 18, fiber: 8, sugars: 4, sodium: 700 },
+    4: { energy: 280, protein: 7, carbohydrates: 45, fat: 8, fiber: 5, sugars: 4, sodium: 550 },
+    5: { energy: 360, protein: 12, carbohydrates: 42, fat: 16, fiber: 5, sugars: 4, sodium: 650 },
+    6: { energy: 190, protein: 5, carbohydrates: 36, fat: 4, fiber: 2, sugars: 1, sodium: 450 },
+    7: { energy: 240, protein: 7, carbohydrates: 38, fat: 6, fiber: 3, sugars: 3, sodium: 500 },
+    8: { energy: 300, protein: 9, carbohydrates: 43, fat: 10, fiber: 5, sugars: 1, sodium: 500 },
+    9: { energy: 330, protein: 7, carbohydrates: 48, fat: 12, fiber: 6, sugars: 2, sodium: 500 },
+    10: { energy: 350, protein: 16, carbohydrates: 32, fat: 17, fiber: 2, sugars: 4, sodium: 650 },
+    11: { energy: 650, protein: 18, carbohydrates: 105, fat: 18, fiber: 12, sugars: 12, sodium: 1200 },
+    12: { energy: 650, protein: 32, carbohydrates: 78, fat: 22, fiber: 4, sugars: 5, sodium: 1100 },
+    13: { energy: 420, protein: 18, carbohydrates: 20, fat: 30, fiber: 4, sugars: 9, sodium: 850 },
+    14: { energy: 320, protein: 7, carbohydrates: 55, fat: 9, fiber: 5, sugars: 4, sodium: 600 },
+    15: { energy: 480, protein: 17, carbohydrates: 78, fat: 11, fiber: 12, sugars: 5, sodium: 900 },
+    16: { energy: 430, protein: 15, carbohydrates: 62, fat: 12, fiber: 3, sugars: 4, sodium: 950 },
+    17: { energy: 490, protein: 25, carbohydrates: 62, fat: 15, fiber: 3, sugars: 4, sodium: 1000 },
+    18: { energy: 400, protein: 10, carbohydrates: 66, fat: 11, fiber: 5, sugars: 8, sodium: 1000 },
+    19: { energy: 620, protein: 18, carbohydrates: 92, fat: 20, fiber: 13, sugars: 9, sodium: 1100 },
+    20: { energy: 520, protein: 19, carbohydrates: 86, fat: 10, fiber: 14, sugars: 7, sodium: 900 },
+    21: { energy: 430, protein: 12, carbohydrates: 72, fat: 11, fiber: 10, sugars: 6, sodium: 850 },
+    22: { energy: 280, protein: 5, carbohydrates: 35, fat: 14, fiber: 4, sugars: 2, sodium: 400 },
+    23: { energy: 560, protein: 14, carbohydrates: 78, fat: 22, fiber: 10, sugars: 12, sodium: 1100 },
+    24: { energy: 260, protein: 5, carbohydrates: 34, fat: 12, fiber: 3, sugars: 4, sodium: 550 },
+    25: { energy: 180, protein: 4, carbohydrates: 32, fat: 5, fiber: 5, sugars: 6, sodium: 500 },
+    26: { energy: 340, protein: 4, carbohydrates: 45, fat: 16, fiber: 4, sugars: 1, sodium: 400 },
+    27: { energy: 300, protein: 9, carbohydrates: 42, fat: 10, fiber: 5, sugars: 6, sodium: 650 },
+    28: { energy: 520, protein: 18, carbohydrates: 54, fat: 27, fiber: 6, sugars: 9, sodium: 1000 },
+    29: { energy: 590, protein: 28, carbohydrates: 50, fat: 30, fiber: 3, sugars: 8, sodium: 1200 },
+    30: { energy: 280, protein: 8, carbohydrates: 48, fat: 6, fiber: 4, sugars: 3, sodium: 500 },
+    31: { energy: 320, protein: 16, carbohydrates: 44, fat: 8, fiber: 2, sugars: 2, sodium: 650 },
+    32: { energy: 300, protein: 7, carbohydrates: 32, fat: 17, fiber: 4, sugars: 5, sodium: 550 },
+    33: { energy: 360, protein: 15, carbohydrates: 42, fat: 15, fiber: 3, sugars: 5, sodium: 750 },
+    34: { energy: 280, protein: 8, carbohydrates: 40, fat: 10, fiber: 1, sugars: 32, sodium: 120 },
+    35: { energy: 150, protein: 1, carbohydrates: 38, fat: 1, fiber: 3, sugars: 32, sodium: 10 },
+    36: { energy: 120, protein: 4, carbohydrates: 18, fat: 4, fiber: 0, sugars: 15, sodium: 60 },
+    37: { energy: 100, protein: 0, carbohydrates: 26, fat: 0, fiber: 1, sugars: 24, sodium: 350 },
+    38: { energy: 240, protein: 8, carbohydrates: 36, fat: 8, fiber: 2, sugars: 30, sodium: 100 },
+    39: { energy: 210, protein: 7, carbohydrates: 38, fat: 4, fiber: 0, sugars: 34, sodium: 90 },
+    40: { energy: 80, protein: 4, carbohydrates: 8, fat: 3, fiber: 0, sugars: 7, sodium: 500 },
+    41: { energy: 430, protein: 9, carbohydrates: 62, fat: 16, fiber: 2, sugars: 48, sodium: 450 },
+    42: { energy: 390, protein: 10, carbohydrates: 54, fat: 16, fiber: 3, sugars: 45, sodium: 220 },
+    43: {}
+  };
+
   const historyByCategory = {
     Breakfast: "A comforting start inspired by traditional South Asian and Indian breakfast kitchens.",
     Lunch: "A wholesome, familiar meal shaped by regional Indian recipes and everyday cafeteria cooking.",
@@ -464,7 +510,8 @@
     history: foodHistory[product.id] || historyByCategory[product.category],
     ingredients: ingredientsByProduct[product.id] || ingredientsByCategory[product.category],
     preparation: preparationByProduct[product.id],
-    recipeSteps: recipeStepsByProduct[product.id] || []
+    recipeSteps: recipeStepsByProduct[product.id] || [],
+    nutrition: nutritionByProduct[product.id] || {}
   }));
 
   const activityKey = "trayup-order-activity";

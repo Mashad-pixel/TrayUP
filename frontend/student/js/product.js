@@ -56,12 +56,34 @@
   document.getElementById("product-price").textContent = `₹${Number(product.price).toLocaleString("en-IN")}`;
   document.getElementById("product-ingredients").innerHTML =
     product.ingredients.map((ingredient) => `<li>${escapeHtml(ingredient)}</li>`).join("");
+  const ingredientCount = product.ingredients.length;
+  document.getElementById("product-ingredient-count").textContent =
+    `${ingredientCount} ${ingredientCount === 1 ? "ingredient" : "ingredients"}`;
+
   document.getElementById("product-history").textContent = product.history || product.description;
   document.getElementById("product-preparation").textContent = product.preparation;
   if (Array.isArray(product.recipeSteps) && product.recipeSteps.length) {
     document.getElementById("product-recipe-steps").innerHTML =
       product.recipeSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
     document.getElementById("product-recipe-section").hidden = false;
+  }
+  const nutritionFacts = [
+    { key: "energy", label: "Energy", unit: "kcal", decimals: 0 },
+    { key: "protein", label: "Protein", unit: "g", decimals: 1 },
+    { key: "carbohydrates", label: "Carbohydrates", unit: "g", decimals: 1 },
+    { key: "fat", label: "Total fat", unit: "g", decimals: 1 },
+    { key: "fiber", label: "Dietary fiber", unit: "g", decimals: 1 },
+    { key: "sugars", label: "Total sugars", unit: "g", decimals: 1 },
+    { key: "sodium", label: "Sodium", unit: "mg", decimals: 0 }
+  ];
+  const availableNutrition = nutritionFacts.filter(({ key }) =>
+    Number.isFinite(product.nutrition?.[key]) && product.nutrition[key] > 0
+  );
+  if (availableNutrition.length) {
+    document.getElementById("product-nutrition-facts").innerHTML = availableNutrition.map(({ key, label, unit, decimals }) => `
+      <div><dt>${label}</dt><dd>${Number(product.nutrition[key]).toFixed(decimals)} <span>${unit}</span></dd></div>
+    `).join("");
+    document.getElementById("product-nutrition-section").hidden = false;
   }
 
   const helpButton = document.getElementById("product-help-button");
