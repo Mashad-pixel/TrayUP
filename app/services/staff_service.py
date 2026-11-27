@@ -64,7 +64,7 @@ def create_staff(data, actor):
     if not isinstance(email, str) or not is_valid_email(normalize_email(email)):
         errors["email"] = "Enter a valid email address."
     if not isinstance(password, str):
-        errors["password"] = "Enter a password."
+        errors["password"] = "Enter a password."  # nosec B105 - validation message, not a credential
     else:
         problem = password_problem(password)
         if problem:

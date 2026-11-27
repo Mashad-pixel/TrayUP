@@ -191,7 +191,7 @@ def update_staff(user_id):
 
     if "password" in payload:
         if not isinstance(payload["password"], str):
-            errors["password"] = "Password must be text."
+            errors["password"] = "Password must be text."  # nosec B105 - validation message, not a credential
         else:
             problem = password_problem(payload["password"])
             if problem:
