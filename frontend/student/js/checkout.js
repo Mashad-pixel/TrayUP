@@ -36,6 +36,7 @@
   function renderFoodImages() {
     summaryFoodImages.innerHTML = cart.map((item) => `
 <figure class="checkout-food-image">
+ <button type="button" class="checkout-food-remove" data-remove-id="${Number(item.id)}" aria-label="Remove ${escapeHtml(item.name)}">×</button>
  <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name)}" loading="eager">
  <figcaption><strong>${escapeHtml(item.name)}</strong><span>Qty ${Number(item.qty) || 1}</span></figcaption>
 </figure>`).join("");
@@ -305,7 +306,7 @@
     }
   });
 
-  summaryEl.addEventListener("click", (event) => {
+  function handleRemoveClick(event) {
     const removeButton = event.target.closest("[data-remove-id]");
     if (!removeButton || submitting) return;
     const removeId = Number(removeButton.dataset.removeId);
@@ -338,7 +339,10 @@
 
     renderEstimate();
     trayNotify("Dish removed from order");
-  });
+  }
+
+  summaryEl.addEventListener("click", handleRemoveClick);
+  summaryFoodImages.addEventListener("click", handleRemoveClick);
 
   prefillStudentDetails();
 })();
