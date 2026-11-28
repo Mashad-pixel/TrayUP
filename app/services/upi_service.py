@@ -5,9 +5,6 @@ import json
 import urllib.parse
 from typing import Any, Dict, Optional, Tuple
 
-import qrcode
-import qrcode.image.svg
-
 from app.services.errors import OrderError
 
 
@@ -61,6 +58,10 @@ def render_upi_qr_svg(upi_uri: str) -> str:
     """Render a pure SVG string for the given UPI URI using qrcode."""
     if not upi_uri or not upi_uri.startswith(("upi://", "phonepe://", "https://")):
         raise OrderError("INVALID_URI", "Cannot generate QR for invalid URI.", 400)
+
+    # Imported here, like presence_service.py, so importing the app never requires the package.
+    import qrcode
+    import qrcode.image.svg
 
     img = qrcode.make(
         upi_uri,
