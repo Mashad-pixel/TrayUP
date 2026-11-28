@@ -210,24 +210,6 @@
     event.preventDefault();
     if (submitting) return;
 
-    setBusy(true, "Checking sign in…");
-    try {
-      const response = await trayAuth.currentUser();
-      if (String(response?.data?.role || "").toUpperCase() !== "STUDENT") {
-        window.location.href = loginUrl;
-        return;
-      }
-    } catch (error) {
-      if (error.status === 401) {
-        window.location.href = loginUrl;
-        return;
-      }
-      setBusy(false);
-      trayNotify(error.message || "Could not verify your sign-in. Please try again.");
-      return;
-    }
-    setBusy(false);
-
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
     const instructions = document.getElementById("instructions").value.trim();
@@ -256,12 +238,13 @@
       return;
     }
 
-    setBusy(true, "Placing order…");
+    setBusy(true, "Opening payment…");
     try {
       if (!serverOrder) {
         idempotencyKey = idempotencyKey || newIdempotencyKey();
         const response = await trayApi.post("/orders", {
-          items: cart.map((item) => ({ menu_item_id: item.id, quantity: item.qty }))
+          items: cart.map((item) => ({ menu_item_id: item.id, quantity: item.qty })),
+          initiate_upi: true
         }, { headers: { "Idempotency-Key": idempotencyKey } });
         serverOrder = response.data;
         idempotencyKey = null;
@@ -270,9 +253,12 @@
       orderDetails = details;
       setCheckoutStep(2);
 
-      setBusy(true, "Preparing UPI payment…");
-      const response = await trayPayment.initiateUpi(serverOrder.id);
-      showUpiPayment(response.data);
+      if (serverOrder.upi_payment) {
+        showUpiPayment(serverOrder.upi_payment);
+      } else {
+        const response = await trayPayment.initiateUpi(serverOrder.id);
+        showUpiPayment(response.data);
+      }
       setBusy(false);
     } catch (error) {
       handleError(error);

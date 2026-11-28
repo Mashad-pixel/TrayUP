@@ -16,6 +16,7 @@ from app.services.order_query_service import (
 )
 from app.services.order_serializer import serialize_order, serialize_tracking
 from app.services.order_service import create_order
+from app.services.upi_payment_service import start_upi_payment
 
 orders_bp = Blueprint("orders", __name__, url_prefix="/api/orders")
 
@@ -46,15 +47,18 @@ def create_order_route():
     except OrderError as exc:
         return _order_error(exc)
 
+    data = serialize_order(order, raw_token)
+    if payload.get("initiate_upi"):
+        try:
+            data["upi_payment"] = start_upi_payment(order.id, current_user.id)
+        except OrderError as exc:
+            return _order_error(exc)
+
     if raw_token is not None:
-        return success_response(
-            "Order created successfully",
-            serialize_order(order, raw_token),
-            201,
-        )
+        return success_response("Order created successfully", data, 201)
 
     # Retry with the same Idempotency-Key: return the original order.
-    return success_response("Existing order returned", serialize_order(order), 200)
+    return success_response("Existing order returned", data, 200)
 
 
 @orders_bp.route("", methods=["GET"])
