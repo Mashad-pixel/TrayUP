@@ -310,7 +310,19 @@
     const removeButton = event.target.closest("[data-remove-id]");
     if (!removeButton || submitting) return;
     const removeId = Number(removeButton.dataset.removeId);
-    cart = cart.filter((item) => Number(item.id) !== removeId);
+    const targetItem = cart.find((item) => Number(item.id) === removeId);
+    if (!targetItem) return;
+
+    const currentQty = Number(targetItem.qty) || 1;
+    let notice;
+    if (currentQty > 1) {
+      targetItem.qty = currentQty - 1;
+      notice = `Removed 1 × ${targetItem.name}`;
+    } else {
+      cart = cart.filter((item) => Number(item.id) !== removeId);
+      notice = `${targetItem.name} removed from order`;
+    }
+
     if (cart.length) trayStorage.set("trayup-cart", cart);
     else trayStorage.remove("trayup-cart");
 
@@ -338,7 +350,7 @@
     }
 
     renderEstimate();
-    trayNotify("Dish removed from order");
+    trayNotify(notice);
   }
 
   summaryEl.addEventListener("click", handleRemoveClick);
