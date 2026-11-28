@@ -24,27 +24,19 @@
 <div class="field"><label for="name">Name</label><input id="name" name="name" required autocomplete="name"></div>
 <div class="field"><label for="phone">Phone number</label><input id="phone" name="phone" type="tel" required autocomplete="tel" aria-describedby="phone-error"><small id="phone-error" class="field-error" role="alert" hidden>Number is invalid</small></div>
 <div class="field"><label for="instructions">Special instructions</label><textarea id="instructions" name="instructions" rows="3" placeholder="Less spicy, no onion…"></textarea></div>
-<fieldset class="payment-method">
-<legend>Payment option</legend>
-<div class="payment-options" id="payment-options" aria-live="polite"><p>Loading payment options…</p></div>
-<button class="btn btn-secondary payment-retry" id="retry-payment-options" type="button" hidden>Retry loading payment options</button>
-</fieldset>
-<button class="btn btn-primary checkout-submit" type="submit" disabled>Continue to payment</button>
+<button class="btn btn-primary checkout-submit" id="checkout-submit-btn" type="submit">Pay Now</button>
 <section id="upi-payment-panel" class="upi-payment-panel" aria-live="polite" hidden>
-  <h2>Pay with UPI</h2>
+  <h2>Complete Payment</h2>
   <p id="upi-order-summary"></p>
   <div class="upi-app-links" aria-label="Open a UPI payment app">
-    <a class="btn btn-secondary" id="open-phonepe" hidden>Open PhonePe</a>
-    <a class="btn btn-secondary" id="open-gpay" hidden>Open GPay</a>
-    <a class="btn btn-secondary" id="open-paytm" hidden>Open Paytm</a>
-    <a class="btn btn-secondary" id="open-upi" hidden>Open UPI app</a>
+    <a class="btn btn-primary" id="open-upi" href="#">⚡ Open UPI App (GPay / PhonePe / Paytm)</a>
   </div>
   <div class="upi-qr-container">
     <img id="upi-qr" alt="Scan this QR code with your UPI app to pay">
     <p>Or scan this QR code with any UPI app.</p>
   </div>
-  <label class="field" for="utr-number">UPI transaction ID / UTR <small>(optional)</small>
-    <input id="utr-number" type="text" maxlength="12" autocomplete="off" placeholder="12 letters or numbers">
+  <label class="field" for="utr-number">12-digit UPI transaction ID / UTR
+    <input id="utr-number" type="text" inputmode="numeric" maxlength="12" autocomplete="off" placeholder="12-digit UTR number from payment receipt">
   </label>
   <button class="btn btn-primary" id="submit-payment-claim" type="button">I Have Paid</button>
   <p id="upi-payment-message" role="status" aria-live="polite"></p>
