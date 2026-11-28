@@ -1,3 +1,10 @@
+# Free-plan limits that affect this app (https://render.com/docs/free):
+#   - Free web services cannot send outbound mail on ports 25, 465 or 587. The recovery emails
+#     (MAIL_PORT=587) will not be delivered on the free plan.
+#   - Free Postgres has no backups, holds 1 GB, and expires 30 days after creation. It stores
+#     orders and payment records, so use a paid plan before real customers use the system.
+#   - Free web services spin down after 15 minutes without traffic and can restart at any time.
+# Changing a plan costs money, so the plans below are unchanged. Change them deliberately.
 services:
   - type: web
     name: trayup-mashad-api
@@ -17,19 +24,29 @@ services:
         fromDatabase:
           name: trayup-postgres
           property: connectionString
+      # Explicit, so a missing shared store cannot be masked by an in-memory fallback.
+      - key: RATELIMIT_ALLOW_MEMORY
+        value: "false"
       - key: RATELIMIT_STORAGE_URI
         fromService:
           type: keyvalue
           name: trayup-ratelimit
           property: connectionString
+      # Required in production. The app refuses to start without the canteen location.
+      - key: CANTEEN_LATITUDE
+        sync: false
+      - key: CANTEEN_LONGITUDE
+        sync: false
       - key: MENU_IMAGE_ALLOWED_HOSTS
         value: images.unsplash.com
       - key: CSP_REPORT_ONLY
         value: "false"
       - key: TRUSTED_PROXY_COUNT
         value: "1"
+      # Operator decision. Set to "true" only after FIREBASE_DATABASE_URL and the service-account
+      # Secret File are in place; startup fails closed otherwise.
       - key: FIREBASE_ENABLED
-        value: "false"
+        sync: false
       - key: FIREBASE_DATABASE_URL
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_PATH

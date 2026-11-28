@@ -1,0 +1,12 @@
+# One line-ending policy for the repository: LF in the working tree and in commits.
+# After adding this file, run once: git add --renormalize . && git commit -m "Normalize line endings"
+* text=auto eol=lf
+
+# Binary files must never be touched by line-ending conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.zip binary

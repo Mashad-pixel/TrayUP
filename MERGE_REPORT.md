@@ -20,7 +20,7 @@ The merge retains the first archive's:
 - complete authorization matrix and tests that create valid server-side sessions;
 - SQLite-safe stock-reservation migration that drops dependent check constraints before dropping the column.
 
-The migration directory contains 17 revisions. A static revision-graph check found one root and one head. This does not prove an existing production database can be upgraded safely; back it up first and test the migration against a copy.
+The migration directory contains 24 revision files, not 17. A static revision-graph check found one root (`b6561fd9dcfb`) and one head (`a9f8e7d6c5b4`). The file for revision `8a9b0c1d2e3f` was renamed to match its revision ID; the ID itself is unchanged. This does not prove an existing production database can be upgraded safely; back it up first and test the migration against a copy.
 
 ## Included later frontend fixes
 
