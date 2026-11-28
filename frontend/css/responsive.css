@@ -99,22 +99,22 @@
     min-height: 80px;
   }
   .home-page .nav-main > .search { height: 48px; min-width: 0; margin: 0; }
-  .home-page .search-field { height: 48px; }
+  .student-page .search-field { height: 48px; }
   .home-page .brand { gap: 0; font-size: 0; }
   .home-page .brand::before { width: 34px; height: 34px; font-size: 20px; }
-  .home-page .search input { min-width: 0; padding: 0 5px 0 0; font-size: 12px; }
-  .home-page .search-placeholder { padding: 0 5px 0 0; font-size: 15px; }
-  .home-page .search-icon { width: 15px; height: 15px; margin-left: 9px; border-width: 3px; }
-  .home-page .search-icon::after { width: 7px; height: 2px; right: -6px; bottom: -4px; }
-  .home-page .search-field { overflow: visible; }
-  .home-page .search-sticker { width: 24px; height: 24px; border-width: 2px; border-radius: 8px; }
-  .home-page .search-sticker svg { width: 14px; height: 14px; }
-  .home-page .search-sticker-fork { top: -12px; left: 18%; }
-  .home-page .search-sticker-spoon { top: -12px; left: 51%; }
-  .home-page .search-sticker-taco { top: -12px; right: 5%; }
-  .home-page .search-sticker-burger { bottom: -12px; left: 18%; }
-  .home-page .search-sticker-chef { bottom: -12px; left: 51%; }
-  .home-page .search-sticker-drink { bottom: -12px; right: 5%; }
+  .student-page .search input { min-width: 0; padding: 0 5px 0 0; font-size: 12px; }
+  .student-page .search-placeholder { padding: 0 5px 0 0; font-size: 15px; }
+  .student-page .search-icon { width: 15px; height: 15px; margin-left: 9px; border-width: 3px; }
+  .student-page .search-icon::after { width: 7px; height: 2px; right: -6px; bottom: -4px; }
+  .student-page .search-field { overflow: visible; }
+  .student-page .search-sticker { width: 24px; height: 24px; border-width: 2px; border-radius: 8px; }
+  .student-page .search-sticker svg { width: 14px; height: 14px; }
+  .student-page .search-sticker-fork { top: -12px; left: 18%; }
+  .student-page .search-sticker-spoon { top: -12px; left: 51%; }
+  .student-page .search-sticker-taco { top: -12px; right: 5%; }
+  .student-page .search-sticker-burger { bottom: -12px; left: 18%; }
+  .student-page .search-sticker-chef { bottom: -12px; left: 51%; }
+  .student-page .search-sticker-drink { bottom: -12px; right: 5%; }
   .home-page .nav-actions { gap: 8px; }
   .home-page .nav-actions .login-link { min-width: 94px; min-height: 40px; gap: 6px; padding: 0 12px; font-size: 12px; }
   .home-page .login-link svg { width: 16px; height: 16px; }

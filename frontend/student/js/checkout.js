@@ -1,7 +1,7 @@
 (function () {
   document.getElementById("app-header").innerHTML = trayComponents.header();
 
-  const cart = trayStorage.get("trayup-cart", []);
+  let cart = trayStorage.get("trayup-cart", []);
   if (!cart.length) {
     document.getElementById("checkout-empty-state").hidden = false;
     document.getElementById("checkout-layout").hidden = true;
@@ -12,8 +12,6 @@
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
   })[character]);
   const rupees = (value) => `₹${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-  // Before the order exists, the total is only an estimate from the cart.
-  const estimatedTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const totalEl = document.getElementById("checkout-total");
   const totalNote = document.getElementById("total-note");
   const summaryEl = document.getElementById("summary");
@@ -30,31 +28,43 @@
     });
   }
 
+  const summaryFoodImages = document.getElementById("summary-food-images");
+  summaryFoodImages.addEventListener("error", (event) => {
+    if (event.target instanceof HTMLImageElement) event.target.style.display = "none";
+  }, true);
+
+  function renderFoodImages() {
+    summaryFoodImages.innerHTML = cart.map((item) => `
+<figure class="checkout-food-image">
+ <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name)}" loading="eager">
+ <figcaption><strong>${escapeHtml(item.name)}</strong><span>Qty ${Number(item.qty) || 1}</span></figcaption>
+</figure>`).join("");
+  }
+
   function renderEstimate() {
+    const estimatedTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
     totalEl.textContent = rupees(estimatedTotal);
     totalNote.textContent = "Estimate. The server confirms the final amount when you place the order.";
     summaryEl.innerHTML = cart.length
-      ? cart.map((item) => `<div class="checkout-summary-row"><span>${item.qty} × ${escapeHtml(item.name)}</span><strong>${rupees(item.price * item.qty)}</strong></div>`).join("")
+      ? cart.map((item) => `<div class="checkout-summary-row"><span>${item.qty} × ${escapeHtml(item.name)}</span><span class="checkout-summary-actions"><strong>${rupees(item.price * item.qty)}</strong><button type="button" class="checkout-remove-item" data-remove-id="${Number(item.id)}" aria-label="Remove ${escapeHtml(item.name)}">Remove</button></span></div>`).join("")
       : `<p style="color:var(--muted)">Your cart is empty</p>`;
+    renderFoodImages();
   }
 
   // Once the server has created the order, show its lines and total: this is what gets charged.
   function renderServerOrder(order) {
     totalEl.textContent = rupees(order.total_paise / 100);
     totalNote.textContent = "Confirmed by the server. This is the amount you will be charged.";
-    summaryEl.innerHTML = (order.items || []).map((line) => `<div class="checkout-summary-row"><span>${Number(line.quantity)} × ${escapeHtml(line.item_name)}</span><strong>${rupees(line.line_total_paise / 100)}</strong></div>`).join("");
+    summaryEl.innerHTML = (order.items || []).map((line) => {
+      const itemId = line.menu_item_id ?? cart.find((c) => c.name === line.item_name)?.id;
+      const removeBtn = itemId != null
+        ? `<button type="button" class="checkout-remove-item" data-remove-id="${Number(itemId)}" aria-label="Remove ${escapeHtml(line.item_name)}">Remove</button>`
+        : "";
+      return `<div class="checkout-summary-row"><span>${Number(line.quantity)} × ${escapeHtml(line.item_name)}</span><span class="checkout-summary-actions"><strong>${rupees(line.line_total_paise / 100)}</strong>${removeBtn}</span></div>`;
+    }).join("");
   }
 
   renderEstimate();
-  const summaryFoodImages = document.getElementById("summary-food-images");
-  summaryFoodImages.addEventListener("error", (event) => {
-    if (event.target instanceof HTMLImageElement) event.target.style.display = "none";
-  }, true);
-  summaryFoodImages.innerHTML = cart.map((item) => `
-<figure class="checkout-food-image">
- <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name)}" loading="eager">
- <figcaption><strong>${escapeHtml(item.name)}</strong><span>Qty ${Number(item.qty) || 1}</span></figcaption>
-</figure>`).join("");
 
   const form = document.getElementById("checkout-form");
   const submitButton = document.getElementById("checkout-submit-btn") || form.querySelector('button[type="submit"]');
@@ -293,6 +303,41 @@
     } finally {
       submitting = false;
     }
+  });
+
+  summaryEl.addEventListener("click", (event) => {
+    const removeButton = event.target.closest("[data-remove-id]");
+    if (!removeButton || submitting) return;
+    const removeId = Number(removeButton.dataset.removeId);
+    cart = cart.filter((item) => Number(item.id) !== removeId);
+    if (cart.length) trayStorage.set("trayup-cart", cart);
+    else trayStorage.remove("trayup-cart");
+
+    const cartCount = document.getElementById("cart-count");
+    if (cartCount) cartCount.textContent = cart.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+
+    if (serverOrder) {
+      serverOrder = null;
+      orderDetails = null;
+      idempotencyKey = null;
+      paymentPanel.hidden = true;
+      submitButton.hidden = false;
+      submitButton.disabled = false;
+      nameInput.disabled = false;
+      phoneInput.disabled = false;
+      document.getElementById("instructions").disabled = false;
+      setCheckoutStep(1);
+    }
+
+    if (!cart.length) {
+      document.getElementById("checkout-empty-state").hidden = false;
+      document.getElementById("checkout-layout").hidden = true;
+      trayNotify("Your cart is now empty");
+      return;
+    }
+
+    renderEstimate();
+    trayNotify("Dish removed from order");
   });
 
   prefillStudentDetails();

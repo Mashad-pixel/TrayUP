@@ -1520,4 +1520,22 @@
   line-height: 1.45;
   color: #4b5563;
 }
+.checkout-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.checkout-remove-item {
+  border: 1px solid #e5d5d2;
+  background: #fff5f5;
+  color: #b42318;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.checkout-remove-item:hover {
+  background: #fee4e2;
+}
 

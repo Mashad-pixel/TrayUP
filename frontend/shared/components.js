@@ -12,7 +12,7 @@
 
   window.trayComponents = {
     header(active = "") {
-      const wrapSearchField = document.body.classList.contains("home-page");
+      const wrapSearchField = document.body.classList.contains("student-page") || document.body.classList.contains("home-page");
       const loginNext = window.location.pathname.endsWith("/student/checkout.html") ? "?next=checkout.html" : "";
       return `
         <header class="top-strip">
