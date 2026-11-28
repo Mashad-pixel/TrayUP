@@ -1,9 +1,8 @@
-
 (() => {
   const NS = 'http://www.w3.org/2000/svg';
   const $ = s => document.querySelector(s);
   const root = document.documentElement;
-  const svg = $('#scene'), linksG = $('#links'), handle = $('#handle'), pull = $('#pull');
+  const svg = $('#scene'), stage = $('.stage'), linksG = $('#links'), handle = $('#handle'), pull = $('#pull');
   const card = $('#login');
   const S = matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.4 : 1;
 
@@ -45,10 +44,85 @@
   }
 
   // State
-  let on = false, cooldownUntil = 0;
+  let on = false, cooldownUntil = 0, autoLightPending = true, autoLightTimer;
+  const autoLightStartedAt = performance.now();
+  const autoLightDelay = 1000;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  let flickerAudio = null, flickerNoise = null, flickerSoundTimer = null;
+  function playFlickerTick() {
+    if (!flickerAudio || flickerAudio.state !== 'running') return;
+    const source = flickerAudio.createBufferSource();
+    const filter = flickerAudio.createBiquadFilter();
+    const gain = flickerAudio.createGain();
+    source.buffer = flickerNoise;
+    filter.type = 'highpass';
+    filter.frequency.value = 1200;
+    const now = flickerAudio.currentTime;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.03);
+    source.connect(filter).connect(gain).connect(flickerAudio.destination);
+    source.start(now);
+    source.stop(now + 0.03);
+    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+  }
+  function startFlickerSound() {
+    if (!autoLightPending || !flickerAudio || flickerAudio.state !== 'running' || flickerSoundTimer !== null) return;
+    playFlickerTick();
+    flickerSoundTimer = setInterval(playFlickerTick, 150);
+  }
+  function stopFlickerSound() {
+    if (flickerSoundTimer !== null) {
+      clearInterval(flickerSoundTimer);
+      flickerSoundTimer = null;
+    }
+  }
+  function unlockFlickerSound() {
+    if (!autoLightPending || reducedMotion || !AudioContextClass) return;
+    if (!flickerAudio) {
+      flickerAudio = new AudioContextClass();
+      flickerNoise = flickerAudio.createBuffer(1, Math.ceil(flickerAudio.sampleRate * 0.03), flickerAudio.sampleRate);
+      const samples = flickerNoise.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+    }
+    if (flickerAudio.state === 'running') { startFlickerSound(); return; }
+    flickerAudio.resume().then(startFlickerSound, error => console.warn('Lamp flicker audio could not start:', error));
+  }
+  if (!reducedMotion && AudioContextClass) {
+    unlockFlickerSound();
+    addEventListener('pointerdown', unlockFlickerSound, { once: true });
+    addEventListener('keydown', unlockFlickerSound, { once: true });
+  }
   let grabbing = false, grabId = null, grabOX = 0, grabOY = 0, downX = 0, downY = 0, downT = 0, maxDown = 0;
   let tgtX = restX, tgtY = restY;
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  let scrollFrame = 0;
+  function updateMobileLampScroll() {
+    if (window.innerWidth > 760) {
+      svg.style.opacity = '';
+      svg.style.filter = '';
+      svg.style.transform = '';
+      return;
+    }
+    const maxScroll = stage.scrollHeight - stage.clientHeight;
+    const progress = maxScroll > 0 && maxScroll - stage.scrollTop < 1
+      ? 1
+      : clamp(stage.scrollTop / Math.max(1, maxScroll), 0, 1);
+    svg.style.opacity = (1 - progress).toFixed(3);
+    svg.style.filter = `brightness(${(1 - progress * 0.45).toFixed(3)}) blur(${(progress * 5).toFixed(1)}px)`;
+    svg.style.transform = `translateY(${(-progress * 24).toFixed(1)}px) scale(${(1 - progress * 0.2).toFixed(3)})`;
+  }
+  function scheduleMobileLampScroll() {
+    if (scrollFrame) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = 0;
+      updateMobileLampScroll();
+    });
+  }
+  stage.addEventListener('scroll', scheduleMobileLampScroll, { passive: true });
+  addEventListener('resize', scheduleMobileLampScroll);
+  updateMobileLampScroll();
   let stretch = 0;             // smoothly eases the chain longer while it is pulled
 
   function svgPt(e) {
@@ -64,11 +138,16 @@
     else if (now < cooldownUntil) return;
     cooldownUntil = now + 300;
     on = !on;
+    if (on && autoLightPending) {
+      autoLightPending = false;
+      clearTimeout(autoLightTimer);
+      stopFlickerSound();
+    }
     if (!on && force === undefined) setTimeout(() => window.__reset && window.__reset(), 600);
     PY[N - 1] = Y[N - 1] + 1.5;
     if (on) {
       startTween(lightT, 1, 900, ease.sine);
-      startTween(cardT, 1, 700, ease.out3);
+      startTween(cardT, 1, 180, ease.out3);
     } else {
       startTween(lightT, 0, 600, ease.out2);
       startTween(cardT, 0, 500, ease.in3);
@@ -112,7 +191,12 @@
 
   let lastL = -1, lastC = -1, lastVis = null;
   function render(now) {
-    const l = tick(lightT, now), c = tick(cardT, now);
+    let l = tick(lightT, now);
+    const c = tick(cardT, now);
+    if (autoLightPending && !reducedMotion && now - autoLightStartedAt < autoLightDelay) {
+      const flicker = [0.05, 0.85, 0.1, 0.95, 0.2, 0.04, 0.72, 0.12];
+      l = flicker[Math.floor((now - autoLightStartedAt) / 150) % flicker.length];
+    }
     if (Math.abs(l - lastL) > 0.0005) { root.style.setProperty('--l', l.toFixed(4)); lastL = l; }
     if (Math.abs(c - lastC) > 0.0005) { root.style.setProperty('--c', c.toFixed(4)); lastC = c; }
     const vis = c > 0.004;
@@ -168,24 +252,19 @@
   });
 
   // Login form (real backend)
-  const email = $('#email'), pass = $('#password'), msg = $('#form-msg'), eye = $('#toggle-pass');
+  const mobile = $('#mobile'), pass = $('#password'), msg = $('#form-msg'), eye = $('#toggle-pass');
   let lbusy = false;
   $('#f-login').addEventListener('submit', async e => {
     e.preventDefault(); if (lbusy) return; msg.textContent = '';
-    const id = parseId(email.value);
-    if (!id) { msg.textContent = 'Enter your account email address.'; email.focus(); return; }
-    if (id.type !== 'email') { msg.textContent = 'Use your account email to sign in.'; email.focus(); return; }
+    const id = parseMobile(mobile.value);
+    if (!id) { msg.textContent = 'Enter a valid mobile number.'; mobile.focus(); return; }
     if (pass.value.length < 8) { msg.textContent = 'Use at least 8 characters for your password.'; pass.focus(); return; }
     lbusy = true; const b = e.submitter; if (b) b.disabled = true;
     try {
-      const response = await trayAuth.login(id.value, pass.value);
+      const response = await trayAuth.loginWithMobile(id.value, pass.value);
       if (String(response?.data?.role || '').toUpperCase() !== 'STUDENT') {
-        try {
-          await trayAuth.logout();
-          msg.textContent = 'This is a staff account. Use the staff sign-in page.';
-        } catch (_) {
-          msg.textContent = 'This is a staff account. Sign out failed; close this page and use the staff sign-in page.';
-        }
+        await trayAuth.logout();
+        msg.textContent = 'This is a staff account. Use the staff sign-in page.';
         return;
       }
       msg.textContent = 'Signed in as ' + response.data.name + '.';
@@ -204,51 +283,45 @@
     eye.setAttribute('aria-pressed', String(show));
     eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   });
-    card.querySelectorAll('[data-social]').forEach(b => b.addEventListener('click', () => {
-    msg.textContent = `${b.dataset.social} sign-in is not connected in this preview.`;
-  }));
-
   // ===== Sign-up & recovery (inside the same card) =====
   const F=(id,l,p,t='text',eye=0)=>`<label class="field" for="${id}">${l}${eye?`<div class="input-wrap"><input id="${id}" type="${t}" placeholder="${p}" autocomplete="off"><button type="button" class="eye" data-for="${id}" aria-label="Show password" aria-pressed="false"></button></div>`:`<input id="${id}" type="${t}" placeholder="${p}" autocomplete="off">`}<span class="hint" id="h-${id}"></span></label>`;
   const BTN=t=>`<button class="btn-primary" type="submit"><span class="t">${t}</span><span class="sp"></span></button>`;
   const TA=(id,l,p)=>`<label class="field" for="${id}">${l}<textarea id="${id}" placeholder="${p}" maxlength="1000"></textarea><span class="hint" id="h-${id}"></span></label>`;
   card.insertAdjacentHTML('beforeend',`
-  <div class="view" id="v-forgot"><form id="f-forgot" novalidate><h1 class="sm">Forgot password?</h1><p class="sub">We’ll send a 6-digit code to the email address on your account.</p>
-   ${F('fg-id','Email address','you@example.com')}${BTN('Continue')}<p class="msg" id="fg-msg" role="alert"></p>
-   <p class="foot"><a href="#" data-view="v-login">Back to Login</a></p><p class="foot" style="margin-top:8px"><a href="#" data-view="v-alt">Can’t access your registered email or mobile number?</a></p></form></div>
+  <div class="view" id="v-forgot"><form id="f-forgot" novalidate><h1 class="sm">Forgot password?</h1><p class="sub">We’ll send a 6-digit code to your registered mobile number.</p>
+   ${F('fg-id','Mobile number','Enter your registered mobile number','tel')}${BTN('Continue')}<p class="msg" id="fg-msg" role="alert"></p>
+   <p class="foot"><a href="#" data-view="v-login">Back to Login</a></p><p class="foot" style="margin-top:8px"><a href="#" data-view="v-alt">Can’t access your registered mobile number?</a></p></form></div>
   <div class="view" id="v-newpw"><form id="f-newpw" novalidate><h1 class="sm">Set a new password.</h1><p class="sub">Choose one you haven’t used before.</p>
    ${F('np1','New password','At least 8 characters','password',1)}${F('np2','Confirm new password','Re-enter your password','password',1)}
    <ul class="rq" id="rq"><li data-r="len">At least 8 characters</li><li data-r="l">A letter</li><li data-r="n">A number</li><li data-r="m">Both passwords match</li></ul>${BTN('Reset password')}<p class="msg" id="np-msg" role="alert"></p></form></div>
   <div class="view" id="v-alt"><button class="back" type="button" data-view="v-forgot">← Back</button><h1 class="sm">Recover your account.</h1><p class="sub">Choose how you’d like to prove it’s you.</p>
    <button class="oc" data-view="v-code">Use a backup recovery code<small>One-time code you saved earlier</small></button>
+   <button class="oc" data-view="v-device">Recover through a trusted device<small>Use a device where you’re already signed in</small></button>
    <button class="oc" data-view="v-support">Contact support<small>Send a recovery request for manual review</small></button></div>
   <div class="view" id="v-code"><form id="f-code" novalidate><button class="back" type="button" data-view="v-alt">← Back</button><h1 class="sm">Backup code.</h1><p class="sub">Each code works only once.</p>
-   ${F('rc-id','Email address','you@example.com')}${F('rc-code','Recovery code','XXXX-XXXX-XXXX')}${BTN('Continue')}<p class="msg" id="rc-msg" role="alert"></p></form></div>
+   ${F('rc-id','Mobile number','Enter your registered mobile number','tel')}${F('rc-code','Recovery code','Enter your recovery code')}${BTN('Continue')}<p class="msg" id="rc-msg" role="alert"></p></form></div>
+  <div class="view" id="v-device"><button class="back" type="button" data-view="v-alt">← Back</button><h1 class="sm">Trusted device.</h1>
+   <p class="sub">Open the app on a device where you’re already signed in, go to Settings → Security → Change password, and confirm with your current password plus a fresh verification code. We never trust a device from a browser cookie alone.</p></div>
   <div class="view" id="v-support"><form id="f-support" novalidate><button class="back" type="button" data-view="v-alt">← Back</button><h1 class="sm">Contact support.</h1><p class="sub">Submitting this doesn’t change your account. We verify ownership first.</p>
-   ${F('sp-name','Full name','Your full name')}${F('sp-id','Registered email or mobile number','you@example.com or 98765 43210')}${F('sp-mail','Contact email for updates','Where we can reach you')}
+   ${F('sp-name','Full name','Your full name')}${F('sp-id','Registered mobile number','Enter your registered mobile number','tel')}${F('sp-mail','Contact email for updates','Where we can reach you')}
    ${F('sp-created','Approx. account creation date','e.g. March 2025')}${F('sp-last','Approx. last successful login','e.g. last month')}${TA('sp-reason','Why did you lose access?','Tell us what happened')}${TA('sp-extra','Anything else that can help (optional)','Devices used, past payments, etc.')}
    <p class="warn">Never share your password, OTP, UPI PIN or banking details.</p>${BTN('Submit request')}<p class="msg" id="sp-msg" role="alert"></p></form></div>`);
   const $$ = q => [...document.querySelectorAll(q)];
   const goView = id => { $$('.view').forEach(v => v.classList.toggle('on', v.id === id)); card.scrollTop = 0; msg.textContent = '';
     const f = $('#' + id).querySelector('input'); if (f && id !== 'v-verify' && on) setTimeout(() => f.focus({ preventScroll: true }), 60); };
   $$('[data-view]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); goView(a.dataset.view); }));
+  const CONTACT_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-  // Goes through the shared API client, so the CSRF token is sent and the server's message is shown.
-  // Successful replies are flattened so callers can read fields such as resetToken and ref directly.
   const post = async (url, body) => {
-    try {
-      // The page passes full /api paths; the shared client already adds /api, so strip it once.
-      const j = await trayApi.post(url.replace(/^\/api/, ''), body);
-      return { ok: true, ...j, ...((j && j.data) || {}) };
-    } catch (e) {
-      if (typeof e.status !== 'number') return { error: 'Can’t reach the server. Check your connection.' };
-      return { error: e.message || 'Something went wrong. Please try again.' };
-    } };
+    try { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({})); return r.ok ? { ok: true, ...j } : { error: j.error || 'Something went wrong. Please try again.' };
+    } catch (e) { return { error: 'Can’t reach the server. Check your connection.' }; } };
 
-  const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-  function parseId(v) { v = v.trim(); if (EMAIL.test(v)) return { type: 'email', value: v.toLowerCase() };
-    if (/^[+()\d\s-]+$/.test(v)) { let d = v.replace(/\D/g, ''); if (d.length === 12 && d.startsWith('91')) d = d.slice(2); if (d.length === 11 && d[0] === '0') d = d.slice(1);
-      if (/^[6-9]\d{9}$/.test(d)) return { type: 'mobile', value: '+91' + d }; } return null; }
+  function parseMobile(v) { v = v.trim();
+    if (!/^\+?[()\d\s-]+$/.test(v)) return null;
+    let d = v.replace(/\D/g, ''); if (d.length === 12 && d.startsWith('91')) d = d.slice(2); if (d.length === 11 && d[0] === '0') d = d.slice(1);
+    return /^[6-9]\d{9}$/.test(d) ? { type: 'mobile', value: '+91' + d } : null; }
+  function parseId(v) { return parseMobile(v); }
   const EYE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
   $$('.eye[data-for]').forEach(b => { b.innerHTML = EYE; b.addEventListener('click', () => { const i = $('#' + b.dataset.for), sh = i.type === 'password';
     i.type = sh ? 'text' : 'password'; b.setAttribute('aria-pressed', sh); b.setAttribute('aria-label', sh ? 'Hide password' : 'Show password'); }); });
@@ -257,17 +330,18 @@
   $('#r-pw').addEventListener('input', e => { const p = e.target.value; let s = 0;
     if (p.length >= 8) s++; if (p.length >= 12) s++; if (/[a-z]/.test(p) && /[A-Z]/.test(p)) s++; if (/\d/.test(p)) s++; if (/[^\w\s]/.test(p)) s++;
     const b = $('#bar'); b.style.width = (p ? Math.max(15, s * 20) : 0) + '%'; b.style.background = s < 3 ? '#f08a6c' : s < 4 ? '#e8b77a' : '#9fd8a8'; });
-  $('#r-id').addEventListener('input', e => { const v = e.target.value.trim(); if (!v) return setH('id', '');
-    const p = parseId(v); setH('id', p ? (p.type === 'email' ? 'Email address detected.' : 'Use an email address to create an account.') : '', p && p.type === 'email' ? 'ok' : 'e'); });
+  $('#r-mobile').addEventListener('input', e => { const v = e.target.value.trim(); if (!v) return setH('mobile', '');
+    setH('mobile', parseMobile(v) ? 'Mobile number looks valid.' : '', parseMobile(v) ? 'ok' : ''); });
   [['r-terms', 'c-terms'], ['r-priv', 'c-priv']].forEach(([i, c]) => $('#' + i).addEventListener('change', () => $('#' + c).classList.remove('bad')));
 
   function validate() {
     let ok = true, first = null; const fail = (el, k, t) => { setH(k, t, 'e'); bad(el, true); ok = false; first = first || el; };
-    const n = $('#r-name'), i = $('#r-id'), p = $('#r-pw'), p2 = $('#r-pw2');
-    [n, i, p, p2].forEach(x => bad(x, false)); setH('name', ''); setH('pw2', '');
+    const n = $('#r-name'), mobile = $('#r-mobile'), p = $('#r-pw'), p2 = $('#r-pw2');
+    [n, mobile, p, p2].forEach(x => bad(x, false)); setH('name', ''); setH('mobile', ''); setH('pw2', '');
     const nm = n.value.trim().replace(/\s+/g, ' ');
     if (!nm) fail(n, 'name', 'Please tell us your name.'); else if (nm.length < 2 || nm.length > 80 || /[<>{}\d]/.test(nm)) fail(n, 'name', 'Please enter your real name (letters only).');
-    if (!i.value.trim()) fail(i, 'id', 'Enter an email address.'); else if (!parseId(i.value) || parseId(i.value).type !== 'email') fail(i, 'id', 'Use a valid email address.');
+    const mobileValue = parseMobile(mobile.value);
+    if (!mobile.value.trim()) fail(mobile, 'mobile', 'Enter your mobile number.'); else if (!mobileValue) fail(mobile, 'mobile', 'Enter a valid mobile number.');
     if (p.value.length < 8 || !/[A-Za-z]/.test(p.value) || !/\d/.test(p.value)) fail(p, 'pw', 'Use 8+ characters with at least one letter and one number.'); else setH('pw', 'Looks good.', 'ok');
     if (!p2.value) fail(p2, 'pw2', 'Please confirm your password.'); else if (p2.value !== p.value) fail(p2, 'pw2', 'Passwords don’t match yet.');
     let consent = true; [['r-terms', 'c-terms'], ['r-priv', 'c-priv']].forEach(([a, c]) => { const b = !$('#' + a).checked; $('#' + c).classList.toggle('bad', b); if (b) { consent = false; ok = false; } });
@@ -275,11 +349,12 @@
     if (!ok) { m.textContent = first ? 'Please fix the highlighted fields.' : 'Please accept the Terms and Privacy Policy to continue.';
       if (first && !consent) m.textContent += ' Both consent boxes are required.';
       const f = $('#f-reg'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); first && first.focus(); } else m.textContent = '';
-    return ok ? { name: nm, id: parseId(i.value), password: p.value } : null;
+    return ok ? { name: nm, mobile: mobileValue.value, password: p.value } : null;
   }
 
   let cur = null, busy = false, flow = 'register', resetTok = null, tm;
   const E = id => document.getElementById(id);
+  ['fg-id', 'rc-id', 'sp-id'].forEach(id => E(id).setAttribute('inputmode', 'tel'));
   const load = (b, v) => { b.classList.toggle('load', v); b.disabled = v; };
   const shake = id => { const f = E(id); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); };
   const hint = (id, t, c) => { const h = E('h-' + id); h.textContent = t || ''; h.className = 'hint' + (c ? ' ' + c : ''); };
@@ -289,10 +364,9 @@
 
   // Register
   E('f-reg').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const v = validate(); if (!v) return;
-    if (v.id.type !== 'email') { E('r-msg').textContent = 'Use an email address to create your account.'; return; }
     busy = true; load(E('r-go'), true);
     try {
-      await trayApi.post('/auth/register', { name: v.name, email: v.id.value, password: v.password });
+      await trayApi.post('/auth/register', { name: v.name, mobile: v.mobile, password: v.password });
       const returnPages = { 'checkout.html': './checkout.html', 'cart.html': './cart.html' };
       window.location.href = returnPages[new URLSearchParams(window.location.search).get('next')] || '../index.html';
     } catch (error) {
@@ -304,13 +378,13 @@
 
   // Forgot password
   E('f-forgot').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const m = E('fg-msg'); m.textContent = '';
-    const id = parseId(E('fg-id').value); if (!id || id.type !== 'email') { m.textContent = "Mobile number recovery isn't available yet. Use your registered email address."; return shake('f-forgot'); }
+    const id = parseId(E('fg-id').value); if (!id) { m.textContent = 'Enter a valid mobile number.'; return shake('f-forgot'); }
     const b = E('f-forgot').querySelector('.btn-primary'); busy = true; load(b, true);
     const r = await post('/api/forgot/start', { identifier: id.value }); busy = false; load(b, false);
     if (r.error) { m.textContent = r.error; return; } startVerify('forgot', id); });
 
   // Shared OTP screen
-  const mask = c => c.type === 'email' ? c.value.replace(/^(.).*(@.*)$/, '$1•••$2') : c.value.replace(/(\+91)(\d{2})\d{5}(\d{3})/, '$1 $2•••••$3');
+  const mask = c => c.value.replace(/(\+91)(\d{2})\d{5}(\d{3})/, '$1 $2•••••$3');
   function startVerify(f, id) { flow = f; cur = id;
     E('vsub').textContent = (f === 'forgot' ? 'If an account matches ' : 'We sent a 6-digit code to ') + mask(id) + (f === 'forgot' ? ', we’ve sent a 6-digit code.' : '.') + ' It expires in 5 minutes.';
     buildOtp(); goView('v-verify'); E('otp').children[0].focus(); cool(); }
@@ -346,7 +420,7 @@
   // Backup code
   E('f-code').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const m = E('rc-msg'); m.textContent = '';
     const id = parseId(E('rc-id').value), code = E('rc-code').value.trim();
-    if (!id || id.type !== 'email' || code.length < 10) { m.textContent = 'Enter your registered email address and your full recovery code.'; return shake('f-code'); }
+    if (!id || code.length < 10) { m.textContent = 'Enter your registered mobile number and full recovery code.'; return shake('f-code'); }
     const b = E('f-code').querySelector('.btn-primary'); busy = true; load(b, true);
     const r = await post('/api/recovery/code', { identifier: id.value, code }); busy = false; load(b, false);
     if (r.error) { m.textContent = r.error; return; } resetTok = r.resetToken; goView('v-newpw'); });
@@ -354,7 +428,7 @@
   // Support request
   E('f-support').addEventListener('submit', async e => { e.preventDefault(); if (busy) return; const m = E('sp-msg'); m.textContent = '';
     const id = parseId(E('sp-id').value), name = E('sp-name').value.trim(), mail = E('sp-mail').value.trim(), why = E('sp-reason').value.trim();
-    if (name.length < 2 || !id || !EMAIL.test(mail) || why.length < 10) { m.textContent = 'Please fill in your name, account, a valid contact email and a short reason.'; return shake('f-support'); }
+    if (name.length < 2 || !id || !CONTACT_EMAIL.test(mail) || why.length < 10) { m.textContent = 'Please fill in your name, registered mobile number, a valid contact email and a short reason.'; return shake('f-support'); }
     const b = E('f-support').querySelector('.btn-primary'); busy = true; load(b, true);
     const r = await post('/api/recovery/request', { name, identifier: id.value, contactEmail: mail, createdEst: E('sp-created').value, lastLoginEst: E('sp-last').value, reason: why, extra: E('sp-extra').value });
     busy = false; load(b, false); if (r.error) { m.textContent = r.error; return; }
@@ -370,9 +444,15 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) leave(); });
   addEventListener('pagehide', leave); addEventListener('blur', leave);
 
-  // Reset link from email (?reset=TOKEN): light the lamp and open the new-password view
+  // Reset links open the new-password view without delaying sign-in.
   const rt = new URLSearchParams(location.search).get('reset');
-  if (rt) { history.replaceState(null, '', location.pathname); resetTok = rt; setTimeout(() => { toggle(true); goView('v-newpw'); }, 400); }
+  if (rt) { history.replaceState(null, '', location.pathname); resetTok = rt; }
+  autoLightTimer = setTimeout(() => {
+    autoLightPending = false;
+    stopFlickerSound();
+    toggle(true);
+    if (rt) goView('v-newpw');
+  }, autoLightDelay);
 
   // Fixed-step physics at 60 Hz, render every frame
   const STEP = 1000 / 60;
