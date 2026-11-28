@@ -17,8 +17,6 @@
   const totalEl = document.getElementById("checkout-total");
   const totalNote = document.getElementById("total-note");
   const summaryEl = document.getElementById("summary");
-  const paymentOptionsEl = document.getElementById("payment-options");
-  const retryPaymentOptionsButton = document.getElementById("retry-payment-options");
   const paymentPanel = document.getElementById("upi-payment-panel");
   const checkoutSteps = Array.from(document.querySelectorAll("[data-checkout-step]"));
 
@@ -59,16 +57,14 @@
 </figure>`).join("");
 
   const form = document.getElementById("checkout-form");
-  const submitButton = form.querySelector('button[type="submit"]');
-  const idleLabel = submitButton.textContent;
+  const submitButton = document.getElementById("checkout-submit-btn") || form.querySelector('button[type="submit"]');
   const nameInput = document.getElementById("name");
   const phoneInput = document.getElementById("phone");
   const phoneError = document.getElementById("phone-error");
   const claimButton = document.getElementById("submit-payment-claim");
   const utrInput = document.getElementById("utr-number");
   const paymentMessage = document.getElementById("upi-payment-message");
-  let paymentMethodsLoaded = false;
-  let hasPaymentMethod = false;
+  const openUpiLink = document.getElementById("open-upi");
   let phoneValidationRequested = false;
 
   // The server order for this checkout. Once it exists, retrying payment reuses it instead of
@@ -87,77 +83,20 @@
     return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
+  function updateSubmitButton() {
+    submitButton.disabled = submitting || !cart.length;
+    const total = serverOrder ? serverOrder.total_paise / 100 : estimatedTotal;
+    submitButton.textContent = submitting ? "Preparing payment…" : `Pay ${rupees(total)}`;
+  }
+
   function setBusy(busy, busyLabel) {
     submitting = busy;
-    submitButton.disabled = busy || !paymentMethodsLoaded || !hasPaymentMethod;
+    submitButton.disabled = busy;
     if (busy) submitButton.textContent = busyLabel;
-    else submitButton.textContent = serverOrder ? "Retry payment" : idleLabel;
+    else updateSubmitButton();
   }
 
-  function renderPaymentMethods(methods) {
-    const upiEnabled = Boolean(methods?.upi?.enabled ?? methods?.upi);
-    const sandboxEnabled = Boolean(methods?.sandbox?.enabled ?? methods?.sandbox);
-    const choices = [];
-    if (upiEnabled) {
-      choices.push(`
-        <label class="payment-option">
-          <input type="radio" name="payment_method" value="upi" required>
-          <span class="payment-logo phonepe">UPI</span>
-          <span><strong>UPI / QR</strong><small>PhonePe, GPay, Paytm or any UPI app</small></span>
-        </label>`);
-    }
-    if (sandboxEnabled) {
-      choices.push(`
-        <label class="payment-option">
-          <input type="radio" name="payment_method" value="sandbox" required>
-          <span class="payment-logo gpay">✓</span>
-          <span><strong>Test Sandbox</strong><small>Instant simulated payment for development</small></span>
-        </label>`);
-    }
-
-    if (!choices.length) {
-      paymentOptionsEl.innerHTML = '<p role="status">No digital payment methods are currently available.</p>';
-      return false;
-    }
-
-    paymentOptionsEl.innerHTML = choices.join("");
-    const selected = methods?.payment_provider === "sandbox" && sandboxEnabled
-      ? "sandbox"
-      : choices.length === 1 && !upiEnabled ? "sandbox" : "upi";
-    const defaultOption = paymentOptionsEl.querySelector(`input[value="${selected}"]`) ||
-      paymentOptionsEl.querySelector('input[type="radio"]');
-    if (defaultOption) defaultOption.checked = true;
-    return true;
-  }
-
-  async function loadPaymentMethods() {
-    retryPaymentOptionsButton.hidden = true;
-    retryPaymentOptionsButton.disabled = true;
-    paymentMethodsLoaded = false;
-    hasPaymentMethod = false;
-    submitButton.disabled = true;
-    paymentOptionsEl.textContent = "Loading payment options…";
-    try {
-      const response = await trayPayment.getMethods();
-      hasPaymentMethod = renderPaymentMethods(response?.data || {});
-      paymentMethodsLoaded = true;
-      submitButton.disabled = !hasPaymentMethod;
-      retryPaymentOptionsButton.hidden = hasPaymentMethod;
-    } catch (error) {
-      paymentMethodsLoaded = false;
-      hasPaymentMethod = false;
-      submitButton.disabled = true;
-      if (error.status === 401) {
-        paymentOptionsEl.innerHTML = `<p role="alert">Sign in is required to continue. <a class="payment-signin" href="${loginUrl}">Sign in</a></p>`;
-      } else {
-        paymentOptionsEl.innerHTML = '<p role="alert">Could not load payment options. Try again when your connection is available.</p>';
-        retryPaymentOptionsButton.hidden = false;
-      }
-    } finally {
-      retryPaymentOptionsButton.disabled = false;
-    }
-  }
-  retryPaymentOptionsButton.addEventListener("click", loadPaymentMethods);
+  updateSubmitButton();
   setCheckoutStep(1);
 
   function validatePhone(showError) {
@@ -210,27 +149,20 @@
     window.location.href = "./confirmation.html";
   }
 
-  function setAppLink(id, uri) {
-    const link = document.getElementById(id);
-    if (!uri) {
-      link.hidden = true;
-      return;
-    }
-    link.href = uri;
-    link.hidden = false;
-  }
-
   function showUpiPayment(data) {
     setCheckoutStep(2);
-    const amountText = rupees((data.amount_paise ?? serverOrder.total_paise) / 100);
+    const amountPaise = data.amount_paise ?? serverOrder.total_paise;
+    const amountText = rupees(amountPaise / 100);
     const amountPill = document.getElementById("upi-amount-pill");
     if (amountPill) amountPill.textContent = amountText;
     document.getElementById("upi-order-summary").textContent =
       `Order ${data.order_number || serverOrder.order_number} · ${amountText}`;
-    setAppLink("open-upi", data.upi_uri || data.phonepe_uri || data.gpay_uri || data.paytm_uri);
+    if (openUpiLink) {
+      openUpiLink.href = data.upi_uri || data.phonepe_uri || data.gpay_uri || data.paytm_uri || "#";
+    }
 
     const qr = document.getElementById("upi-qr");
-    const qrPath = data.qr_svg_url || `/api/payments/${data.order_id || serverOrder.id}/upi-qr.svg`;
+    const qrPath = data.qr_svg_url || `/api/payments/${serverOrder.id}/upi-qr.svg`;
     qr.src = new URL(qrPath, window.location.origin).href;
     qr.hidden = false;
     paymentMessage.textContent = "After paying, enter your 12-digit UTR number and tap “I Have Paid”.";
@@ -239,7 +171,14 @@
     nameInput.disabled = true;
     phoneInput.disabled = true;
     document.getElementById("instructions").disabled = true;
-    paymentOptionsEl.querySelectorAll("input").forEach((input) => { input.disabled = true; });
+
+    // On mobile phones, automatically trigger the native OS UPI app chooser
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile && data.upi_uri) {
+      try {
+        window.location.href = data.upi_uri;
+      } catch (_) {}
+    }
   }
 
   function handleError(error) {
@@ -281,18 +220,12 @@
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
     const instructions = document.getElementById("instructions").value.trim();
-    const selectedMethod = form.querySelector('input[name="payment_method"]:checked');
-    if (!paymentMethodsLoaded || !hasPaymentMethod || !selectedMethod) {
-      trayNotify("Payment options are not available. Please refresh and try again.");
-      return;
-    }
-    const paymentMethod = selectedMethod.value;
     const details = {
       name,
       phone,
       instructions,
-      paymentMethod,
-      paymentProvider: paymentMethod === "sandbox" ? "Test Sandbox" : "UPI / Soundbox"
+      paymentMethod: "upi",
+      paymentProvider: "UPI / Soundbox"
     };
 
     phoneValidationRequested = true;
@@ -326,25 +259,6 @@
       orderDetails = details;
       setCheckoutStep(2);
 
-      if (paymentMethod === "sandbox") {
-        setBusy(true, "Completing test payment…");
-        const response = await trayPayment.completeSandbox(serverOrder.id);
-        if (response?.data?.refund_required) {
-          submitting = false;
-          hasPaymentMethod = false;
-          submitButton.hidden = true;
-          paymentOptionsEl.innerHTML = 'This payment needs review. <a href="./tracking.html">Check Track orders</a>.';
-          trayNotify("This order needs staff review. Check Track orders before trying again.");
-          return;
-        }
-        completeOrder({ ...serverOrder, ...response.data }, {
-          ...details,
-          paymentMethod: "sandbox",
-          paymentProvider: "Test Sandbox"
-        });
-        return;
-      }
-
       setBusy(true, "Preparing UPI payment…");
       const response = await trayPayment.initiateUpi(serverOrder.id);
       showUpiPayment(response.data);
@@ -357,8 +271,8 @@
   claimButton.addEventListener("click", async () => {
     if (!serverOrder || submitting) return;
     const utrNumber = utrInput.value.trim();
-    if (utrNumber && !/^[A-Za-z0-9]{12}$/.test(utrNumber)) {
-      paymentMessage.textContent = "Enter a 12-character alphanumeric UTR, or leave it blank.";
+    if (!/^\d{12}$/.test(utrNumber)) {
+      paymentMessage.textContent = "Enter the 12-digit UTR number from your UPI payment receipt.";
       utrInput.focus();
       return;
     }
@@ -370,7 +284,7 @@
       const response = await trayPayment.submitUpiClaim(serverOrder.id, utrNumber);
       completeOrder({ ...serverOrder, ...response.data }, {
         ...orderDetails,
-        paymentMethod: "upi_soundbox",
+        paymentMethod: "upi",
         paymentProvider: "UPI / Soundbox"
       });
     } catch (error) {
@@ -382,5 +296,4 @@
   });
 
   prefillStudentDetails();
-  loadPaymentMethods();
 })();

@@ -1,4 +1,4 @@
-from flask import Blueprint, request
+from flask import Blueprint, current_app, request
 from flask_login import current_user, login_required
 
 from app.extensions import limiter
@@ -41,7 +41,7 @@ def create_order_route():
             idempotency_key=request.headers.get("Idempotency-Key"),
             customer=customer,
             presence_session_token=request.headers.get("X-Presence-Session"),
-            require_presence=True,
+            require_presence=bool(current_app.config.get("PRESENCE_REQUIRED", False)),
         )
     except OrderError as exc:
         return _order_error(exc)

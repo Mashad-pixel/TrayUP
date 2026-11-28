@@ -158,6 +158,7 @@ class Config:
         if os.getenv("CANTEEN_LONGITUDE")
         else (0.0 if _on_render else None)
     )
+    PRESENCE_REQUIRED = os.getenv("PRESENCE_REQUIRED", "false").lower() == "true"
     PRESENCE_RADIUS_METERS = _positive_int_env("PRESENCE_RADIUS_METERS", 100)
     PRESENCE_MAX_ACCURACY_METERS = _positive_int_env("PRESENCE_MAX_ACCURACY_METERS", 75)
     PRESENCE_GPS_MAX_AGE_SECONDS = _positive_int_env("PRESENCE_GPS_MAX_AGE_SECONDS", 60)
@@ -212,6 +213,7 @@ class TestingConfig(Config):
     RECOVERY_DELIVERY = "memory"
     CANTEEN_LATITUDE = 0.0
     CANTEEN_LONGITUDE = 0.0
+    PRESENCE_REQUIRED = True
     PHONEPE_SALT_KEY = "test_phonepe_salt_key_1234567890"
     UPI_VPA = "canteen@ybl"
 
