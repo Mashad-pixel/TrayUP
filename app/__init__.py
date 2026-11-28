@@ -5,7 +5,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.responses import error_response
 from app.cli import register_cli
-from app.config import DEV_SECRET_KEY, config_map
+from app.config import DEV_SECRET_KEY, config_map, validate_runtime_settings
 from app.extensions import csrf, db, limiter, login_manager, migrate
 from app.models.user import User, UserRole
 from app.routes.admin import admin_bp
@@ -82,6 +82,10 @@ def create_app(config_name="production"):
             raise RuntimeError(
                 "Refusing to start with an unsafe production configuration:\n- " + "\n- ".join(problems)
             )
+
+    # Presence-verification settings (canteen coordinates, https public URL, TTL bounds).
+    # Production must fail closed here; the same range checks apply in every environment.
+    validate_runtime_settings(app.config, config_name)
 
     frontend_policy = build_frontend_policy(
         app.config["MENU_IMAGE_ALLOWED_HOSTS"],
