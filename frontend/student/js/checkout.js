@@ -222,18 +222,18 @@
 
   function showUpiPayment(data) {
     setCheckoutStep(2);
+    const amountText = rupees((data.amount_paise ?? serverOrder.total_paise) / 100);
+    const amountPill = document.getElementById("upi-amount-pill");
+    if (amountPill) amountPill.textContent = amountText;
     document.getElementById("upi-order-summary").textContent =
-      `Order ${data.order_number || serverOrder.order_number} · ${rupees(data.amount_paise / 100)}`;
-    setAppLink("open-phonepe", data.phonepe_uri);
-    setAppLink("open-gpay", data.gpay_uri);
-    setAppLink("open-paytm", data.paytm_uri);
-    setAppLink("open-upi", data.upi_uri);
+      `Order ${data.order_number || serverOrder.order_number} · ${amountText}`;
+    setAppLink("open-upi", data.upi_uri || data.phonepe_uri || data.gpay_uri || data.paytm_uri);
 
     const qr = document.getElementById("upi-qr");
     const qrPath = data.qr_svg_url || `/api/payments/${data.order_id || serverOrder.id}/upi-qr.svg`;
     qr.src = new URL(qrPath, window.location.origin).href;
     qr.hidden = false;
-    paymentMessage.textContent = "After paying, return here and tap “I Have Paid”.";
+    paymentMessage.textContent = "After paying, enter your 12-digit UTR number and tap “I Have Paid”.";
     paymentPanel.hidden = false;
     submitButton.hidden = true;
     nameInput.disabled = true;

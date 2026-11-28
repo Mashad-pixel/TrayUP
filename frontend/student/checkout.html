@@ -31,23 +31,25 @@
 </fieldset>
 <button class="btn btn-primary checkout-submit" type="submit" disabled>Continue to payment</button>
 <section id="upi-payment-panel" class="upi-payment-panel" aria-live="polite" hidden>
-  <h2>Pay with UPI</h2>
-  <p id="upi-order-summary"></p>
+  <div class="upi-pay-banner">Pay <span id="upi-amount-pill">₹0</span></div>
+  <h2 class="upi-title">Complete Payment</h2>
+  <p id="upi-order-summary" class="upi-subtitle"></p>
   <div class="upi-app-links" aria-label="Open a UPI payment app">
-    <a class="btn btn-secondary" id="open-phonepe" hidden>Open PhonePe</a>
-    <a class="btn btn-secondary" id="open-gpay" hidden>Open GPay</a>
-    <a class="btn btn-secondary" id="open-paytm" hidden>Open Paytm</a>
-    <a class="btn btn-secondary" id="open-upi" hidden>Open UPI app</a>
+    <a class="upi-app-btn" id="open-upi" hidden><span aria-hidden="true">⚡</span> Open UPI App (GPay / PhonePe / Paytm)</a>
   </div>
   <div class="upi-qr-container">
-    <img id="upi-qr" alt="Scan this QR code with your UPI app to pay">
-    <p>Or scan this QR code with any UPI app.</p>
+    <div class="upi-qr-frame">
+      <img id="upi-qr" alt="Scan this QR code with your UPI app to pay">
+    </div>
+    <p class="upi-qr-caption">Or scan this QR code with any UPI app.</p>
   </div>
-  <label class="field" for="utr-number">UPI transaction ID / UTR <small>(optional)</small>
-    <input id="utr-number" type="text" maxlength="12" autocomplete="off" placeholder="12 letters or numbers">
+  <div class="upi-divider" aria-hidden="true"><span>or</span></div>
+  <label class="upi-utr-field" for="utr-number">
+    <span>12-digit UPI transaction ID / UTR</span>
+    <input id="utr-number" type="text" maxlength="12" autocomplete="off" placeholder="12-digit UTR number from payment receipt">
   </label>
-  <button class="btn btn-primary" id="submit-payment-claim" type="button">I Have Paid</button>
-  <p id="upi-payment-message" role="status" aria-live="polite"></p>
+  <button class="upi-paid-btn" id="submit-payment-claim" type="button">I Have Paid</button>
+  <p id="upi-payment-message" class="upi-helper-note" role="status" aria-live="polite">After paying, enter your 12-digit UTR number and tap “I Have Paid”.</p>
 </section>
 </form>
 <aside class="card checkout-summary"><h2>Order summary</h2><div id="summary" class="checkout-summary-lines"></div><div class="cart-total checkout-grand-total"><span>Total</span><strong id="checkout-total">₹0</strong></div><p id="total-note" class="checkout-trust-note"></p><h3 class="checkout-food-heading">Your food</h3><div id="summary-food-images" class="checkout-food-images" aria-label="Photos of foods in your order"></div></aside>

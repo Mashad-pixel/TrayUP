@@ -1381,3 +1381,143 @@
   .product-about p:last-child { grid-column: 1; grid-row: auto; }
   .product-about p:last-child { margin-top: 8px; }
 }
+
+.upi-payment-panel {
+  margin-top: 20px;
+  padding: 22px 18px 24px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid #e6e2d8;
+  box-shadow: 0 12px 32px rgba(17, 24, 39, 0.08);
+  text-align: center;
+}
+.upi-pay-banner {
+  display: block;
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.upi-pay-banner span {
+  color: #f3c04b;
+}
+.upi-title {
+  margin: 18px 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #161616;
+}
+.upi-subtitle {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: #5b5b5b;
+}
+.upi-app-links {
+  display: flex;
+  justify-content: center;
+}
+.upi-app-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 13px 18px;
+  border-radius: 999px;
+  background: #1c1c1c;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.upi-app-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.94;
+}
+.upi-qr-frame {
+  display: inline-block;
+  margin: 18px auto 10px;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid #e2e2e2;
+  background: #ffffff;
+}
+.upi-qr-frame img {
+  display: block;
+  width: 210px;
+  height: 210px;
+  object-fit: contain;
+}
+.upi-qr-caption {
+  margin: 0;
+  font-size: 14px;
+  color: #2f2f2f;
+}
+.upi-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+.upi-divider::before,
+.upi-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #dedede;
+}
+.upi-utr-field {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+.upi-utr-field input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1.5px solid #d4d4d4;
+  background: #ffffff;
+  color: #161616;
+  font-size: 14px;
+}
+.upi-utr-field input:focus {
+  outline: none;
+  border-color: #e39e26;
+  box-shadow: 0 0 0 3px rgba(243, 192, 75, 0.2);
+}
+.upi-paid-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 14px 20px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f6c244, #e39e26);
+  color: #161616;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(227, 158, 38, 0.25);
+}
+.upi-paid-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.upi-helper-note {
+  max-width: 300px;
+  margin: 12px auto 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #4b5563;
+}
+
