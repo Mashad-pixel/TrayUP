@@ -160,7 +160,10 @@
     };
     trayStorage.remove("trayup-cart");
     trayStorage.set("trayup-last-order", saved);
-    window.location.href = "./confirmation.html";
+    const params = new URLSearchParams();
+    if (order.id != null) params.set("order_id", String(order.id));
+    if (order.order_number) params.set("receipt", String(order.order_number));
+    window.location.href = `./order-placed-animation.html?${params.toString()}`;
   }
 
   function showUpiPayment(data) {

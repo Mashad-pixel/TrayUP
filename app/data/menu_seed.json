@@ -942,5 +942,22 @@
       "Chill the bottle until cold.",
       "Serve unopened until ready to drink."
     ]
+  },
+  {
+    "name": "Tissue",
+    "description": "Pack of clean paper tissues.",
+    "category": "Snacks",
+    "price_paise": 100,
+    "image_url": "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=900&q=82",
+    "is_veg": true,
+    "is_available": true,
+    "ingredients": [
+      "Soft paper tissue"
+    ],
+    "preparation": "Packed clean paper tissues ready to serve with your order.",
+    "recipe_steps": [
+      "Check that the pack is sealed and clean.",
+      "Serve alongside the meal."
+    ]
   }
 ]

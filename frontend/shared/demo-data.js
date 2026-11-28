@@ -48,7 +48,8 @@
       { id: 40, name: "Buttermilk", category: "Drinks", price: 25, description: "Cooling spiced chaas with fresh herbs.", image: image("photo-1576091160399-112ba8d25d1d"), isVeg: true, rating: 4.3, isPopular: false, isAvailable: true },
       { id: 41, name: "Oreo Milkshake", category: "Drinks", price: 90, description: "Chocolate cookies blended with cold milk.", image: image("photo-1572490122747-3968b75cc699"), isVeg: true, rating: 4.7, isPopular: false, isAvailable: true },
       { id: 42, name: "Chocolate Milkshake", category: "Drinks", price: 80, description: "Rich chocolate milkshake topped with cream.", image: image("photo-1541658016709-82535e94bc69"), isVeg: true, rating: 4.6, isPopular: false, isAvailable: true },
-      { id: 43, name: "Water Bottle", category: "Drinks", price: 20, description: "Chilled sealed packaged drinking water.", image: image("photo-1602143407151-7111542de6e8"), isVeg: true, rating: 4.2, isPopular: false, isAvailable: true }
+      { id: 43, name: "Water Bottle", category: "Drinks", price: 20, description: "Chilled sealed packaged drinking water.", image: image("photo-1602143407151-7111542de6e8"), isVeg: true, rating: 4.2, isPopular: false, isAvailable: true },
+      { id: 44, name: "Tissue", category: "Snacks", price: 1, description: "Pack of clean paper tissues.", image: image("photo-1583947215259-38e31be8751f"), isVeg: true, rating: 4.5, isPopular: false, isAvailable: true }
     ],
 
     orders: [

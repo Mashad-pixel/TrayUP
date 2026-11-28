@@ -44,4 +44,5 @@ DEMO_PRODUCTS = [
     {"id": 41, "name": "Oreo Milkshake", "category": "Drinks", "price_paise": 9000, "description": "Chocolate cookies blended with cold milk.", "image_url": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?auto=format&fit=crop&w=900&q=82"},
     {"id": 42, "name": "Chocolate Milkshake", "category": "Drinks", "price_paise": 8000, "description": "Rich chocolate milkshake topped with cream.", "image_url": "https://images.unsplash.com/photo-1541658016709-82535e94bc69?auto=format&fit=crop&w=900&q=82"},
     {"id": 43, "name": "Water Bottle", "category": "Drinks", "price_paise": 2000, "description": "Chilled sealed packaged drinking water.", "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=82"},
+    {"id": 44, "name": "Tissue", "category": "Snacks", "price_paise": 100, "description": "Pack of clean paper tissues.", "image_url": "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&w=900&q=82"},
 ]
