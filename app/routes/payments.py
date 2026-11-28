@@ -17,6 +17,7 @@ from app.services.payment_service import (
     verify_webhook_signature,
 )
 from app.services.upi_payment_service import (
+    available_payment_methods,
     payment_methods,
     phonepe_webhook,
     start_upi_payment,
@@ -76,6 +77,8 @@ def create_payment_order_route():
 @roles_required(UserRole.STUDENT)
 def payment_methods_route():
     raw_order_id = request.args.get("order_id", "")
+    if not raw_order_id:
+        return success_response("Payment methods retrieved", available_payment_methods())
     try:
         order_id = int(raw_order_id)
         if order_id < 1:

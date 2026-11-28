@@ -95,8 +95,10 @@
   }
 
   function renderPaymentMethods(methods) {
+    const upiEnabled = Boolean(methods?.upi?.enabled ?? methods?.upi);
+    const sandboxEnabled = Boolean(methods?.sandbox?.enabled ?? methods?.sandbox);
     const choices = [];
-    if (methods?.upi?.enabled) {
+    if (upiEnabled) {
       choices.push(`
         <label class="payment-option">
           <input type="radio" name="payment_method" value="upi" required>
@@ -104,7 +106,7 @@
           <span><strong>UPI / QR</strong><small>PhonePe, GPay, Paytm or any UPI app</small></span>
         </label>`);
     }
-    if (methods?.sandbox?.enabled) {
+    if (sandboxEnabled) {
       choices.push(`
         <label class="payment-option">
           <input type="radio" name="payment_method" value="sandbox" required>
@@ -119,9 +121,9 @@
     }
 
     paymentOptionsEl.innerHTML = choices.join("");
-    const selected = methods?.payment_provider === "sandbox" && methods?.sandbox?.enabled
+    const selected = methods?.payment_provider === "sandbox" && sandboxEnabled
       ? "sandbox"
-      : choices.length === 1 && !methods?.upi?.enabled ? "sandbox" : "upi";
+      : choices.length === 1 && !upiEnabled ? "sandbox" : "upi";
     const defaultOption = paymentOptionsEl.querySelector(`input[value="${selected}"]`) ||
       paymentOptionsEl.querySelector('input[type="radio"]');
     if (defaultOption) defaultOption.checked = true;
@@ -228,12 +230,9 @@
     setAppLink("open-upi", data.upi_uri);
 
     const qr = document.getElementById("upi-qr");
-    if (data.qr_svg_url) {
-      qr.src = new URL(data.qr_svg_url, window.location.origin).href;
-      qr.hidden = false;
-    } else {
-      qr.hidden = true;
-    }
+    const qrPath = data.qr_svg_url || `/api/payments/${data.order_id || serverOrder.id}/upi-qr.svg`;
+    qr.src = new URL(qrPath, window.location.origin).href;
+    qr.hidden = false;
     paymentMessage.textContent = "After paying, return here and tap “I Have Paid”.";
     paymentPanel.hidden = false;
     submitButton.hidden = true;

@@ -30,6 +30,15 @@ def _settings():
     }
 
 
+def available_payment_methods():
+    settings = _settings()
+    return {
+        **settings,
+        "upi": True,
+        "sandbox": current_app.testing or current_app.config.get("PAYMENT_SANDBOX_ENABLED", False),
+    }
+
+
 def payment_methods(order_id, student_id):
     order = Order.query.filter_by(id=order_id, student_id=student_id).first()
     if order is None:
