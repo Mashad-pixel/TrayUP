@@ -21,7 +21,9 @@ def production_problems(config, dev_secret_key):
         )
 
     storage_uri = config.get("RATELIMIT_STORAGE_URI")
-    if not isinstance(storage_uri, str) or not storage_uri.startswith(SHARED_RATE_LIMIT_SCHEMES):
+    raw_allow_memory = config.get("RATELIMIT_ALLOW_MEMORY", False)
+    allow_memory = raw_allow_memory is True or str(raw_allow_memory).strip().lower() in {"1", "true", "yes", "on"}
+    if not allow_memory and (not isinstance(storage_uri, str) or not storage_uri.startswith(SHARED_RATE_LIMIT_SCHEMES)):
         problems.append(
             "RATELIMIT_STORAGE_URI must point to shared storage (redis:// or rediss://). "
             "In-memory counters are not shared between instances and reset on restart."

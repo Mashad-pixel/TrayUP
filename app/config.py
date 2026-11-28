@@ -129,6 +129,9 @@ class Config:
     RATELIMIT_ENABLED = True
     # For production with multiple workers/instances, configure a shared Redis store.
     RATELIMIT_STORAGE_URI = os.getenv("RATELIMIT_STORAGE_URI", "memory://")
+    RATELIMIT_ALLOW_MEMORY = (
+        os.getenv("RATELIMIT_ALLOW_MEMORY", os.getenv("RENDER", "false")).lower() == "true"
+    )
     REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "20 per hour; 100 per day")
 
     # Trust only the configured reverse-proxy count when interpreting forwarded client headers.
@@ -144,11 +147,16 @@ class Config:
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
     RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
 
+    _on_render = os.getenv("RENDER", "false").lower() == "true"
     CANTEEN_LATITUDE = (
-        float(os.environ["CANTEEN_LATITUDE"]) if os.getenv("CANTEEN_LATITUDE") else None
+        float(os.environ["CANTEEN_LATITUDE"])
+        if os.getenv("CANTEEN_LATITUDE")
+        else (0.0 if _on_render else None)
     )
     CANTEEN_LONGITUDE = (
-        float(os.environ["CANTEEN_LONGITUDE"]) if os.getenv("CANTEEN_LONGITUDE") else None
+        float(os.environ["CANTEEN_LONGITUDE"])
+        if os.getenv("CANTEEN_LONGITUDE")
+        else (0.0 if _on_render else None)
     )
     PRESENCE_RADIUS_METERS = _positive_int_env("PRESENCE_RADIUS_METERS", 100)
     PRESENCE_MAX_ACCURACY_METERS = _positive_int_env("PRESENCE_MAX_ACCURACY_METERS", 75)
@@ -156,7 +164,7 @@ class Config:
     PRESENCE_TOKEN_TTL_SECONDS = _positive_int_env("PRESENCE_TOKEN_TTL_SECONDS", 10)
     PRESENCE_SESSION_TTL_SECONDS = _positive_int_env("PRESENCE_SESSION_TTL_SECONDS", 180)
     PRESENCE_RETENTION_DAYS = _positive_int_env("PRESENCE_RETENTION_DAYS", 30)
-    PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+    PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL", "")
 
     RECOVERY_DELIVERY = os.getenv("RECOVERY_DELIVERY", "smtp")
     RECOVERY_CODE_MINUTES = _positive_int_env("RECOVERY_CODE_MINUTES", 5)
