@@ -170,7 +170,7 @@ def test_unverified_admin_session_cannot_reach_admin_features(app):
 # ---------- Server-side sessions ----------
 
 def test_logout_revokes_the_server_session_so_a_copied_cookie_stops_working(app):
-    student = _user("logout@test.com", UserRole.STUDENT)
+    staff = _user("logout@test.com", UserRole.KITCHEN)
     client = app.test_client()
     _login(client, "logout@test.com")
     with client.session_transaction() as sess:
@@ -181,7 +181,7 @@ def test_logout_revokes_the_server_session_so_a_copied_cookie_stops_working(app)
 
     replay = app.test_client()
     with replay.session_transaction() as sess:
-        sess["_user_id"] = str(student.id)
+        sess["_user_id"] = str(staff.id)
         sess["_fresh"] = True
         sess["sid"] = token
     assert replay.get("/api/auth/me").status_code == 401

@@ -96,9 +96,17 @@
     helpButton.textContent = expanded ? "Show help" : "Hide help";
   });
 
+  galleryTrack.addEventListener("error", (event) => {
+    const img = event.target;
+    if (img instanceof HTMLImageElement) {
+      img.style.display = "none";
+      img.parentElement?.classList.add("food-image-unavailable");
+    }
+  }, true);
+
   galleryTrack.innerHTML = galleryViews.map((view, index) => `
     <figure class="product-gallery-slide">
-      <img src="${escapeHtml(view.image)}" alt="${escapeHtml(product.name)} — ${escapeHtml(view.label)}" loading="eager" ${index ? "" : "fetchpriority=\"high\""} onerror="this.style.display='none';this.parentElement.classList.add('food-image-unavailable')">
+      <img src="${escapeHtml(view.image)}" alt="${escapeHtml(product.name)} — ${escapeHtml(view.label)}" loading="eager" ${index ? "" : "fetchpriority=\"high\""}>
       <figcaption>${escapeHtml(view.label)}</figcaption>
     </figure>
   `).join("");

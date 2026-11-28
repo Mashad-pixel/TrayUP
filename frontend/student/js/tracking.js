@@ -126,7 +126,7 @@
                     ${item.description ? `<p>${escapeHtml(item.description)}</p>` : ""}
                     <strong>Item total: ₹${Number(item.lineTotal).toLocaleString("en-IN")}</strong>
                   </div>
-                  ${item.image ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.remove()">` : ""}
+                  ${item.image ? `<img class="order-food-image" src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}">` : ""}
                 </div>
               `).join("")}
             </div>
@@ -235,4 +235,10 @@
   });
 
   load();
+  document.addEventListener("error", (event) => {
+    const img = event.target;
+    if (img instanceof HTMLImageElement && img.classList.contains("order-food-image")) {
+      img.remove();
+    }
+  }, true);
 })();

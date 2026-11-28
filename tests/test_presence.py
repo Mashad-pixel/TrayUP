@@ -506,13 +506,13 @@ def test_student_can_register_and_is_signed_in(app):
     client = app.test_client()
     response = client.post("/api/auth/register", json={
         "name": "New Student",
-        "email": "  NEW@test.com ",
+        "mobile": "9876543211",
         "password": "LongEnough1",
     })
     assert response.status_code == 201
     data = response.get_json()["data"]
     assert data["role"] == "STUDENT"
-    assert data["email"] == "new@test.com"
+    assert data["mobile_number"] == "9876543211"
     assert "csrf_token" in data
     assert client.get("/api/auth/me").status_code == 200
 
@@ -520,7 +520,7 @@ def test_student_can_register_and_is_signed_in(app):
 def test_registration_always_creates_a_student_even_if_a_role_is_sent(app):
     response = app.test_client().post("/api/auth/register", json={
         "name": "Sneaky",
-        "email": "sneaky@test.com",
+        "mobile": "9876543212",
         "password": "LongEnough1",
         "role": "ADMIN",
     })
@@ -531,11 +531,11 @@ def test_registration_always_creates_a_student_even_if_a_role_is_sent(app):
 def test_duplicate_registration_is_rejected(app, student):
     response = app.test_client().post("/api/auth/register", json={
         "name": "Again",
-        "email": "student@test.com",
+        "mobile": student.mobile_number,
         "password": "LongEnough1",
     })
     assert response.status_code == 409
-    assert response.get_json()["error"]["code"] == "EMAIL_UNAVAILABLE"
+    assert response.get_json()["error"]["code"] == "MOBILE_UNAVAILABLE"
 
 
 @pytest.mark.parametrize("payload", [

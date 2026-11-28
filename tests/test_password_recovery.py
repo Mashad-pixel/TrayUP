@@ -160,9 +160,9 @@ def test_reset_changes_the_password_and_signs_out_every_session(app, anon_client
     assert response.status_code == 200
 
     assert signed_in.get("/api/auth/me").status_code == 401
-    login = anon_client.post("/api/auth/login", json={"email": "student@test.com", "password": NEW_PASSWORD})
+    login = anon_client.post("/api/auth/login", json={"mobile": student.mobile_number, "password": NEW_PASSWORD})
     assert login.status_code == 200
-    old = anon_client.post("/api/auth/login", json={"email": "student@test.com", "password": "StrongPass123!"})
+    old = anon_client.post("/api/auth/login", json={"mobile": student.mobile_number, "password": "StrongPass123!"})
     assert old.status_code == 401
 
 

@@ -294,7 +294,7 @@
       <article class="food-card" data-id="${escapeHtml(item.id)}">
         <div class="food-card-image-wrap">
           <a class="food-card-image-link" href="./student/product.html?id=${encodeURIComponent(item.id)}" aria-label="View ${escapeHtml(item.name)} details">
-            <img class="food-card-image" src="${escapeHtml(item.image)}" alt="" loading="lazy" onerror="this.style.display='none';this.closest('.food-card-image-wrap').classList.add('food-image-unavailable')">
+            <img class="food-card-image" src="${escapeHtml(item.image)}" alt="" loading="lazy">
           </a>
           ${item.isFeatured ? '<span class="food-card-ribbon">Featured</span>' : ""}
         </div>
@@ -612,6 +612,14 @@
     item.qty += Number(button.dataset.qty);
     saveCart(cart.filter((entry) => entry.qty > 0));
   });
+
+  document.addEventListener("error", (event) => {
+    const img = event.target;
+    if (img instanceof HTMLImageElement && img.classList.contains("food-card-image")) {
+      img.style.display = "none";
+      img.closest(".food-card-image-wrap")?.classList.add("food-image-unavailable");
+    }
+  }, true);
 
   renderCategoryRail();
   renderHero();

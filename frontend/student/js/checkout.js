@@ -48,9 +48,13 @@
   }
 
   renderEstimate();
-  document.getElementById("summary-food-images").innerHTML = cart.map((item) => `
+  const summaryFoodImages = document.getElementById("summary-food-images");
+  summaryFoodImages.addEventListener("error", (event) => {
+    if (event.target instanceof HTMLImageElement) event.target.style.display = "none";
+  }, true);
+  summaryFoodImages.innerHTML = cart.map((item) => `
 <figure class="checkout-food-image">
- <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name)}" loading="eager" onerror="this.style.display='none'">
+ <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name)}" loading="eager">
  <figcaption><strong>${escapeHtml(item.name)}</strong><span>Qty ${Number(item.qty) || 1}</span></figcaption>
 </figure>`).join("");
 

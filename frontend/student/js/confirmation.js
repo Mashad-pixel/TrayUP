@@ -1,89 +1,37 @@
-(async function () {
+(function () {
   document.getElementById("app-header").innerHTML = trayComponents.header();
-
-  const $ = (id) => document.getElementById(id);
+  const order = trayStorage.get("trayup-last-order", null);
+  const data = order && order.data ? order.data : {};
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
-  })[character]);
-  const paidStatuses = ["paid", "captured", "completed", "success"];
-  const PAYMENT_LABELS = { pending: "Online payment pending", failed: "Payment failed", refunded: "Refunded", partially_refunded: "Partially refunded", paid: "Paid" };
-
-  function showUnavailable(title, message) {
-    $("confirmation-title").textContent = title;
-    $("confirmation-copy").textContent = message;
-    $("receipt-number").textContent = "—";
-    $("confirmation-food-track").innerHTML = `<p style="color:var(--muted)">${escapeHtml(message)}</p>`;
-  }
-
-  // The order comes from the server, looked up by the id in the URL. Nothing is read from browser
-  // storage, so the receipt, name, phone and items shown are the ones the server saved.
-  const orderId = Number(new URLSearchParams(window.location.search).get("order_id"));
-  if (!Number.isInteger(orderId) || orderId < 1) {
-    showUnavailable("Order not found", "We couldn’t find this order. Open Track orders to see your orders.");
-    return;
-  }
-
-  let order;
-  try {
-    const response = await trayApi.get(`/orders/${orderId}`);
-    order = response.data;
-  } catch (error) {
-    if (error.status === 401) {
-      window.location.replace("./login.html");
-      return;
-    }
-    if (error.status === 404) {
-      showUnavailable("Order not found", "We couldn’t find this order. Open Track orders to see your orders.");
+  }[character]));
+  const paid = ["paid", "captured", "completed", "success"].includes(String(data.payment_status || "").toLowerCase());
+  const awaitingConfirmation = String(data.payment_status || "").toLowerCase() === "awaiting_confirmation";
+  document.getElementById("receipt-number").textContent = escapeHtml(data.order_number || "Pending");
+  document.getElementById("confirmation-name").textContent = escapeHtml(data.student_name || "Not provided");
+  document.getElementById("confirmation-phone").textContent = escapeHtml(data.phone_number || "Not provided");
+  document.getElementById("confirmation-payment").textContent = escapeHtml(data.payment_provider || (data.payment_method === "cash" ? "Cash on pickup" : "Online"));
+  document.getElementById("confirmation-instructions").textContent = escapeHtml(data.instructions || "No special instructions");
+  if (!paid) {
+    document.getElementById("payment-progress").classList.remove("complete");
+    document.getElementById("payment-progress").classList.add("active");
+    if (awaitingConfirmation) {
+      document.getElementById("confirmation-title").textContent = "Payment awaiting confirmation";
+      document.getElementById("confirmation-copy").textContent =
+        "Your payment claim was received. Staff will confirm it after hearing the Soundbox.";
+      document.querySelector("#payment-progress span:last-child").textContent = "Awaiting confirmation";
+      document.querySelector(".order-progress .progress-step").classList.remove("complete");
+      document.querySelector(".order-progress .progress-step span:last-child").textContent = "Order placed";
+      document.querySelector(".confirmation-icon").textContent = "…";
     } else {
-      showUnavailable("Order unavailable", "We couldn’t load your order. Check your connection and refresh the page.");
+      document.getElementById("confirmation-copy").textContent = "Your order is waiting for payment.";
     }
-    return;
   }
-
-  // A paid order goes to the animated confirmation.
-  if (paidStatuses.includes(String(order.payment_status || "").toLowerCase())) {
-    window.location.replace(`./order-placed-animation.html?receipt=${encodeURIComponent(order.order_number)}&order_id=${orderId}`);
-    return;
-  }
-
-  const trackLink = document.querySelector('a[href="./tracking.html"]');
-  if (trackLink) trackLink.href = `./tracking.html?order_id=${orderId}`;
-
-  $("receipt-number").textContent = order.order_number || "Pending";
-  $("confirmation-name").textContent = order.customer_name || "Not provided";
-  $("confirmation-phone").textContent = order.customer_phone || "Not provided";
-  $("confirmation-payment").textContent = PAYMENT_LABELS[order.payment_status] || "Payment status unavailable";
-  $("confirmation-instructions").textContent = order.instructions || "No special instructions";
-
-  $("payment-progress").classList.remove("complete");
-  $("payment-progress").classList.add("active");
-  if (order.order_status === "cancelled") {
-    $("confirmation-title").textContent = "Order cancelled";
-    $("confirmation-copy").textContent = "This order was cancelled. Ask the canteen counter if you need help.";
-  } else if (order.payment_status === "pending") {
-    $("confirmation-title").textContent = "Payment pending";
-    $("confirmation-copy").textContent = "Your order has been saved, but online payment has not been confirmed. Check My Orders before attempting another payment.";
-  } else if (order.payment_status === "failed") {
-    $("confirmation-title").textContent = "Payment failed";
-    $("confirmation-copy").textContent = "Payment was not confirmed. Check My Orders for the latest order status.";
-  } else {
-    $("confirmation-copy").textContent = "Your order status is shown below. Check My Orders for the latest updates.";
-  }
-
-  // Dish photos come from the menu catalog. The order itself only stores names and quantities.
-  let imageById = new Map();
-  try {
-    const dishes = await window.trayCatalog.list();
-    imageById = new Map(dishes.map((dish) => [dish.id, dish.image]));
-  } catch (_) {}
-
-  const items = Array.isArray(order.items) ? order.items : [];
-  $("confirmation-food-track").innerHTML = items.length ? items.map((item) => {
-    const image = imageById.get(item.menu_item_id);
-    return `
-      <article class="confirmation-food-card">
-        ${image ? `<img src="${escapeHtml(image)}" alt="${escapeHtml(item.item_name || "Food")}" loading="eager">` : ""}
-        <div><strong>${escapeHtml(item.item_name || "Food")}</strong><span>Qty ${Number(item.quantity) || 1}</span></div>
-      </article>`;
-  }).join("") : '<p style="color:var(--muted)">No food items found.</p>';
+  const items = Array.isArray(data.items) ? data.items : [];
+  document.getElementById("confirmation-food-track").innerHTML = items.length ? items.map((item) => `
+    <article class="confirmation-food-card">
+      <img src="${escapeHtml(item.image || "")}" alt="${escapeHtml(item.name || "Food")}" loading="eager">
+      <div><strong>${escapeHtml(item.name || "Food")}</strong><span>Qty ${Number(item.qty || item.quantity || 1)}</span></div>
+    </article>
+  `).join("") : '<p style="color:var(--muted)">No food items found.</p>';
 })();
