@@ -101,15 +101,17 @@ Do not run these commands against the live repository until all maintainers appr
 
 ## Remaining risks and required operational steps
 
-1. Enter `FIREBASE_DATABASE_URL` in Render after this commit. The Render blueprint leaves it `sync: false` to avoid embedding the project endpoint in Git. Firebase is enabled in the blueprint and startup will fail closed if the URL or service-account Secret File is missing.
-2. Render still uses `memory://` for rate-limit storage and one Gunicorn worker. This is not shared across processes and resets on restart. Configure Redis before adding workers/instances.
+1. Enter `FIREBASE_DATABASE_URL` in Render after this commit. The Render blueprint leaves it `sync: false` to avoid embedding the project endpoint in Git. `FIREBASE_ENABLED` is also `sync: false`, so the mirror stays off until an operator sets it to `true`. Startup then fails closed if the URL or the service-account Secret File is missing.
+2. Rate-limit storage: the blueprint sets `RATELIMIT_STORAGE_URI` from the shared key-value service `trayup-ratelimit` and `RATELIMIT_ALLOW_MEMORY` to `false`. Before this revision, `app/config.py` defaulted `RATELIMIT_ALLOW_MEMORY` from Render's `RENDER=true` variable, which allowed in-memory counters in production. That default is removed (see Post-audit corrections). Confirm on the live service that `RATELIMIT_STORAGE_URI` starts with `rediss://`. The Gunicorn worker count is still 1.
 3. Review the GitHub Actions results after the push. The audit environment could inspect and edit GitHub source but could not execute the app or pytest locally; no passing test/dependency scan is claimed until CI completes.
 4. Confirm GitHub secret scanning and push protection in repository settings; the available repository connection did not expose the security-settings state.
 5. Add a strict Content Security Policy after migrating existing inline scripts/event handlers to external scripts/nonces. A strict CSP was not forced here because it could break existing pages.
 6. Complete a Render deployment smoke test: login by role, student registration, student order retrieval, kitchen queue, collection QR verification, Firebase health check, and Razorpay test flow.
 7. Confirm Vercel/Render environment values and Firebase database access rules directly in their provider dashboards.
 
-## Verification status
+## Verification status (historical)
+
+The results below apply to commit `f498cb08537c159845e8b76d52096a851ab8f136` only. Changes made after that commit, including those in Post-audit corrections, have not been run through CI.
 
 **GitHub Actions verification passed on commit `f498cb08537c159845e8b76d52096a851ab8f136` (run #45574810589):**
 
@@ -119,3 +121,18 @@ Do not run these commands against the live repository until all maintainers appr
 - JavaScript syntax check (`node --check` across `frontend` and `tests/frontend`): **Passed**
 
 Repository secret-pattern scans and source reviews were also completed as described above. Live Render/Firebase/Razorpay/Vercel deployment smoke tests were not run, and GitHub repository security-settings state was not available for inspection. Do not treat this repository-level audit as a guarantee that the deployed system is fully secure; complete the operational checks and remaining-risk items above.
+
+## Post-audit corrections
+
+A later review found the following. Items 1 to 4 change behavior; the rest are documentation or repository changes.
+
+1. **Canteen location defaulted to 0.0, 0.0 on Render.** `app/config.py` used `RENDER=true` to pick a fallback location of 0.0, 0.0, and `render.yaml` never set the coordinates. The geofence would have been placed in the ocean, and presence checks would have failed for every student. The fallback is removed, and `CANTEEN_LATITUDE` and `CANTEEN_LONGITUDE` are now `sync: false`. **Set both before deploying**, because production now refuses to start without them.
+2. **Rate-limit memory default keyed to `RENDER`.** Render sets `RENDER=true` on every service, so the default allowed in-memory counters in production and made the production check ineffective. `RATELIMIT_ALLOW_MEMORY` now defaults to `false` and is set explicitly in `render.yaml`.
+3. **Firebase flag.** `FIREBASE_ENABLED` is an operator decision (`sync: false`), not a literal `"false"`.
+4. **Migration file name.** `3f9a1c2b4d5e_add_recovery_and_order_details.py` declared revision `8a9b0c1d2e3f`. It is renamed to match. The revision ID is unchanged, so no database is affected.
+5. **Repository hygiene.** The root-level copies of `session_service.py`, `user.py`, `admin_staff.py` and `staff_service.py` were dead code and are removed. `frontend/shared/demo-data.js` was not loaded by any page, so it is removed. `source_snapshots/` (two nested archives) is removed. Line endings are normalized by `.gitattributes`.
+6. **Free-plan limits (not changed in code).** On Render's free plan, web services cannot send outbound mail on ports 25, 465 or 587, so password-recovery email (`MAIL_PORT` 587) will not be delivered. Free Postgres has no backups and expires 30 days after creation, and it stores orders and payments. Free web services spin down after 15 minutes idle and can restart at any time. Upgrading plans costs money, so this is an owner decision; `render.yaml` documents it.
+7. **Razorpay webhooks.** Razorpay retries a failed webhook for 24 hours with exponential backoff and disables the webhook after 24 hours of failures. A cold start of about a minute is survivable. A suspended service is not, and a disabled webhook must be re-enabled by hand in the Razorpay dashboard. Rely on the webhook plus the server-side payment check, and watch for disabled-webhook alerts.
+8. **Content Security Policy.** `style-src` still allows `'unsafe-inline'`. The frontend HTML has about 90 inline `style=` attributes, which must move to stylesheets before this can be removed. A plain-text search found no inline `<script>` blocks or `on*=` handler attributes in the HTML.
+9. **Lockfiles.** Neither Python nor frontend dependencies are locked. Generate and commit `requirements.lock` (for example with `pip-compile`) and `tests/frontend/package-lock.json` (with `npm install`).
+
