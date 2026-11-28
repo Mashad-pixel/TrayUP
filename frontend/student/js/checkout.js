@@ -42,9 +42,12 @@
 </figure>`).join("");
   }
 
+  function getEstimatedTotal() {
+    return cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  }
+
   function renderEstimate() {
-    const estimatedTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-    totalEl.textContent = rupees(estimatedTotal);
+    totalEl.textContent = rupees(getEstimatedTotal());
     totalNote.textContent = "Estimate. The server confirms the final amount when you place the order.";
     summaryEl.innerHTML = cart.length
       ? cart.map((item) => `<div class="checkout-summary-row"><span>${item.qty} × ${escapeHtml(item.name)}</span><span class="checkout-summary-actions"><strong>${rupees(item.price * item.qty)}</strong><button type="button" class="checkout-remove-item" data-remove-id="${Number(item.id)}" aria-label="Remove ${escapeHtml(item.name)}">Remove</button></span></div>`).join("")
@@ -96,7 +99,7 @@
 
   function updateSubmitButton() {
     submitButton.disabled = submitting || !cart.length;
-    const total = serverOrder ? serverOrder.total_paise / 100 : estimatedTotal;
+    const total = serverOrder ? serverOrder.total_paise / 100 : getEstimatedTotal();
     submitButton.textContent = submitting ? "Preparing payment…" : `Pay ${rupees(total)}`;
   }
 
@@ -336,6 +339,7 @@
     }
 
     renderEstimate();
+    updateSubmitButton();
     trayNotify(notice);
   }
 
