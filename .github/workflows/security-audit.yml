@@ -39,6 +39,12 @@ jobs:
         run: pip-audit --strict -r requirements.txt
       - name: Run Python security linter
         run: bandit -q -r app
+      - name: Install frontend behaviour-test dependencies
+        working-directory: tests/frontend
+        run: npm install --no-audit --no-fund
+      - name: Run frontend behaviour tests
+        working-directory: tests/frontend
+        run: npm test
       - name: Check JavaScript syntax
         run: |
           find frontend tests/frontend -type f -name '*.js' -print0 | xargs -0 -n1 node --check

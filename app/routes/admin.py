@@ -5,16 +5,13 @@ from app.models.menu import MenuItem
 from app.models.user import UserRole
 from app.responses import error_response
 from app.security.permissions import roles_required
-from app.services.canteen_service import (
-    get_canteen_settings,
-    update_canteen_settings,
-    update_status,
-)
-from app.services.errors import ServiceValidationError
+from app.services.canteen_service import update_status
+from app.services.errors import OrderError, ServiceValidationError
 from app.services.firebase_service import firebase_connection_status
 from app.services.menu_service import (
     MenuValidationError,
     create_menu_item,
+    delete_menu_item,
     serialize_menu_item,
     update_menu_item,
 )
@@ -73,6 +70,20 @@ def update_item(item_id):
     return jsonify(item=serialize_menu_item(item)), 200
 
 
+@admin_bp.delete("/menu/<int:item_id>")
+@login_required
+@roles_required(UserRole.ADMIN)
+def delete_item(item_id):
+    item = MenuItem.query.filter_by(id=item_id).with_for_update().first()
+    if item is None:
+        return error_response("MENU_ITEM_NOT_FOUND", "Menu item not found.", 404)
+    try:
+        deleted_id = delete_menu_item(item)
+    except OrderError as exc:
+        return error_response(exc.code, exc.message, exc.status)
+    return jsonify(success=True, deleted=deleted_id, message="Menu item deleted."), 200
+
+
 @admin_bp.patch("/canteen/status")
 @login_required
 @roles_required(UserRole.ADMIN)
@@ -85,28 +96,6 @@ def update_canteen_status():
     except ServiceValidationError as exc:
         return _validation_error(exc.errors)
     return jsonify(status), 200
-
-
-@admin_bp.get("/canteen/settings")
-@login_required
-@roles_required(UserRole.ADMIN)
-def admin_canteen_settings():
-    settings = get_canteen_settings()
-    return jsonify(settings), 200
-
-
-@admin_bp.patch("/canteen/settings")
-@login_required
-@roles_required(UserRole.ADMIN)
-def update_admin_canteen_settings():
-    data = _json_object()
-    if data is None:
-        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
-    try:
-        settings = update_canteen_settings(data)
-    except ServiceValidationError as exc:
-        return _validation_error(exc.errors)
-    return jsonify(settings), 200
 
 
 @admin_bp.get("/firebase/status")

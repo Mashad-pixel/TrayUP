@@ -4,6 +4,7 @@ services:
     runtime: python
     plan: free
     region: singapore
+    autoDeploy: true
     buildCommand: pip install -r requirements.txt
     startCommand: flask --app wsgi:app db upgrade && gunicorn --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT wsgi:app
     healthCheckPath: /api/health
@@ -17,11 +18,18 @@ services:
           name: trayup-postgres
           property: connectionString
       - key: RATELIMIT_STORAGE_URI
-        value: memory://
+        fromService:
+          type: keyvalue
+          name: trayup-ratelimit
+          property: connectionString
+      - key: MENU_IMAGE_ALLOWED_HOSTS
+        value: images.unsplash.com
+      - key: CSP_REPORT_ONLY
+        value: "false"
       - key: TRUSTED_PROXY_COUNT
         value: "1"
       - key: FIREBASE_ENABLED
-        value: "true"
+        value: "false"
       - key: FIREBASE_DATABASE_URL
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_PATH
@@ -32,6 +40,29 @@ services:
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+      # Email for password-recovery codes. Production refuses MAIL_BACKEND=console or memory.
+      - key: MAIL_BACKEND
+        value: smtp
+      - key: MAIL_HOST
+        sync: false
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MAIL_USE_TLS
+        value: "true"
+
+  # Shared rate-limit counters. The app refuses to start in production with memory://,
+  # so every instance and restart uses the same counters.
+  - type: keyvalue
+    name: trayup-ratelimit
+    plan: free
+    region: singapore
+    maxmemoryPolicy: allkeys-lru
 
 databases:
   - name: trayup-postgres

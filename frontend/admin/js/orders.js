@@ -1,32 +1,94 @@
 (async function () {
-  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  const body=document.getElementById("orders-body");
-  let orders=[];
-  function render(){
-    const q=document.getElementById("order-search").value.toLowerCase();
-    const payment=document.getElementById("payment-filter").value.toLowerCase();
-    const status=document.getElementById("status-filter").value.toLowerCase();
-    const rows=orders.filter(o=>(!q||(String(o.order_number||"")+" "+String(o.student_name||"")).toLowerCase().includes(q))&&
-      (!payment||String(o.payment_status||"").toLowerCase()===payment)&&
-      (!status||String(o.status||"").toLowerCase()===status));
-    body.innerHTML=rows.length?rows.map(o=>"<tr><td><strong>"+esc(o.order_number||o.id)+"</strong></td><td>"+
-      esc(o.student_name||"Guest")+"</td><td>₹"+Number(o.total_amount||o.amount||0).toLocaleString("en-IN")+
-      '</td><td><span class="status">'+esc(o.status||"—")+"</span></td><td>"+esc(o.payment_status||"—")+"</td></tr>"
-    ).join(""):'<tr><td colspan="5">No matching orders</td></tr>';
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const body = document.getElementById("orders-body");
+  const search = document.getElementById("order-search");
+  const payment = document.getElementById("payment-filter");
+  const status = document.getElementById("status-filter");
+  let page = 1, pages = 1, busy = false, queuedPage = null, timer = null;
+  let currentOrders = [], loadError = "";
+
+  function render(orders = currentOrders) {
+    currentOrders = orders;
+    if (loadError) {
+      body.innerHTML = `<tr><td colspan="5">${esc(loadError)}</td></tr>`;
+      return;
+    }
+    const query = search.value.trim().toLowerCase();
+    const filtered = orders.filter((order) => {
+      const orderStatus = String(order.order_status || "").toLowerCase();
+      const paymentStatus = String(order.payment_status || "").toLowerCase();
+      const student = String(order.student?.name || "").toLowerCase();
+      const identifier = String(order.order_number || order.id || "").toLowerCase();
+      return (!query || student.includes(query) || identifier.includes(query)) &&
+        (!status.value || orderStatus === status.value) &&
+        (!payment.value || paymentStatus === payment.value);
+    });
+    body.innerHTML = filtered.length ? filtered.map(order => {
+      const student = order.student && order.student.name;
+      const amount = Number(order.total_paise || 0) / 100;
+      return `<tr><td><strong>${esc(order.order_number || order.id)}</strong></td><td>${esc(student || "Student")}</td>` +
+        `<td>₹${amount.toLocaleString("en-IN", {maximumFractionDigits:2})}</td>` +
+        `<td><span class="status">${esc(order.order_status || "—")}</span></td>` +
+        `<td>${esc(order.payment_status || "—")}</td></tr>`;
+    }).join("") : '<tr><td colspan="5">No matching orders</td></tr>';
+
+    const pager = document.getElementById("orders-pagination");
+    if (pager) pager.innerHTML = `<button class="btn btn-secondary" id="orders-prev" ${page <= 1 || busy ? "disabled" : ""}>Previous</button>` +
+      `<span>Page ${page} of ${Math.max(1, pages)}</span>` +
+      `<button class="btn btn-secondary" id="orders-next" ${page >= pages || busy ? "disabled" : ""}>Next</button>`;
   }
-  function renderDemo(){
-    orders=[["TUP-4825","Aarav Shah",310,"Preparing","Captured"],["TUP-4821","Meera Iyer",225,"Ready","Captured"],
-      ["TUP-4818","Kabir Singh",280,"Preparing","Captured"],["TUP-4809","Zoya Khan",190,"Collected","Captured"]]
-      .map((r,i)=>({id:i+1,order_number:r[0],student_name:r[1],total_amount:r[2],status:r[3],payment_status:r[4]}));
-    body.insertAdjacentHTML("beforebegin",'<p class="status warning">Read-only demo data</p>'); render();
+
+  async function load(nextPage = 1) {
+    // Do not drop a search/filter change just because the previous request is still in flight.
+    // Keep only the latest requested page; the next request reads the latest control values.
+    if (busy) {
+      queuedPage = nextPage;
+      return;
+    }
+
+    busy = true;
+    page = Math.max(1, Number(nextPage) || 1);
+    loadError = "";
+    body.innerHTML = '<tr><td colspan="5">Loading…</td></tr>';
+
+    const params = new URLSearchParams({page:String(page), per_page:"10"});
+    if (search.value.trim()) params.set("search", search.value.trim());
+    if (payment.value) params.set("payment_status", payment.value);
+    if (status.value) params.set("order_status", status.value);
+
+    try {
+      const response = await trayApi.get(`/admin/orders?${params.toString()}`);
+      const data = response?.data || {};
+      pages = Math.max(1, Number(data.pagination?.pages) || 1);
+      currentOrders = Array.isArray(data.orders) ? data.orders : [];
+    } catch (error) {
+      currentOrders = [];
+      loadError = error.status === 401 ? "Please sign in to view administrator orders." :
+        error.status === 403 ? "Administrator access is required." :
+        `Could not load orders: ${error.message || "Please retry."}`;
+      const pager = document.getElementById("orders-pagination");
+      if (pager) pager.replaceChildren();
+    } finally {
+      busy = false;
+      if (queuedPage !== null) {
+        const requestedPage = queuedPage;
+        queuedPage = null;
+        void load(requestedPage);
+      } else {
+        render();
+      }
+    }
   }
-  try{
-    if(new URLSearchParams(location.search).get("demo")==="1") renderDemo();
-    else {const r=await trayApi.get("/admin/orders");orders=r?.data?.orders||[];render();}
-  }catch(error){
-    body.textContent=error.status===401?"Please sign in to view administrator orders.":
-      error.status===403?"This account does not have administrator access.":"Unable to load orders. Please retry.";
-  }
-  ["order-search","payment-filter","status-filter"].forEach(id=>
-    document.getElementById(id).addEventListener(id==="order-search"?"input":"change",render));
+
+  [payment,status].forEach(input => input.addEventListener("change", () => load(1)));
+  search.addEventListener("input", () => {
+    render();
+    clearTimeout(timer);
+    timer = setTimeout(() => load(1), 300);
+  });
+  document.getElementById("orders-pagination")?.addEventListener("click", event => {
+    if (event.target.id === "orders-prev" && page > 1) load(page - 1);
+    if (event.target.id === "orders-next" && page < pages) load(page + 1);
+  });
+  await load(1);
 })();

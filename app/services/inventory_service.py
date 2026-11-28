@@ -144,3 +144,4 @@ def return_sold_stock(order_id):
         )
         if updated != 1:
             raise _inventory_mismatch()
+        reservation.status = ReservationStatus.RELEASED

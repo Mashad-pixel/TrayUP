@@ -1,3 +1,4 @@
+from tests.session_helpers import issue_test_session
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +26,7 @@ def login_as(test_client, user):
     with test_client.session_transaction() as sess:
         sess["_user_id"] = str(user.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(user)
     return test_client
 
 

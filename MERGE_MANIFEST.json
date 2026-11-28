@@ -1,0 +1,38 @@
+{
+  "base_archive": "TrayUP-fixed-2.zip",
+  "supplement_archive": "TrayUP-errors-3-onward-fixed(1).zip",
+  "policy": "A canonical for backend/migrations/python tests; B selected frontend, frontend tests, CI, and unique files",
+  "b_overrides": [
+    ".gitignore",
+    ".github/workflows/security-audit.yml",
+    "CHANGES.md",
+    "frontend/admin/categories.html",
+    "frontend/admin/js/orders.js",
+    "frontend/admin/js/settings.js",
+    "frontend/admin/menu.html",
+    "frontend/admin/orders.html",
+    "frontend/admin/refunds.html",
+    "frontend/admin/reports.html",
+    "frontend/admin/settings.html",
+    "frontend/shared/api.js",
+    "frontend/shared/mode.js",
+    "frontend/student/confirmation.html",
+    "frontend/student/js/cart-page.js",
+    "frontend/student/js/checkout.js",
+    "frontend/student/js/confirmation.js",
+    "frontend/student/js/order-confirmation.js",
+    "frontend/student/js/menu.js",
+    "frontend/student/js/product.js",
+    "frontend/student/js/tracking.js",
+    "tests/frontend/README.md",
+    "tests/frontend/account-pages.test.js",
+    "tests/frontend/admin-fixes.test.js",
+    "tests/frontend/student-fixes.test.js"
+  ],
+  "b_added": [
+    "DEPLOYMENT_CHECKLIST.md",
+    "FIXES_FROM_03_ONWARD.md",
+    "tests/frontend/api-client.test.js",
+    "tests/frontend/storage-errors.test.js"
+  ]
+}

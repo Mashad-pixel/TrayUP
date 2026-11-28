@@ -11,15 +11,19 @@ from app.models.order_item import OrderItem
 from app.models.order_status_history import OrderStatusHistory
 from app.models.payment import Payment, PaymentRecordStatus
 from app.services.collection_service import expire_collection_tokens
-from app.services.canteen_service import is_accepting_orders
+from app.services.canteen_service import get_status
 from app.services.errors import OrderError
+from app.services.order_details import CustomerDetails, request_fingerprint
 from app.services.inventory_service import release_reservations, reserve_stock, return_sold_stock
 from app.services.pricing_service import normalize_requested_items, price_order
+from app.services.presence_service import consume_presence_session, load_presence_session_for_order
 from app.services.time_utils import as_utc, utcnow
 from app.services.firebase_service import sync_order_to_firebase
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 64
 EXPIRY_NOTE = "Payment not completed in time"
+DEFAULT_EXPIRY_BATCH_SIZE = 100
+MAX_EXPIRY_BATCH_SIZE = 1000
 
 
 def _generate_order_number():
@@ -48,6 +52,36 @@ def _find_existing_order(student_id, key):
     return Order.query.filter_by(student_id=student_id, idempotency_key=key).first()
 
 
+def _assert_same_request(existing, requested, fingerprint):
+    """A reused key must carry the same request. Otherwise it would return the wrong order."""
+    if existing.request_fingerprint is not None:
+        same = existing.request_fingerprint == fingerprint
+    else:
+        # Orders made before fingerprints existed: compare the items only.
+        stored = sorted((line.menu_item_id, line.quantity) for line in existing.items)
+        same = stored == sorted(requested)
+    if not same:
+        raise OrderError(
+            "IDEMPOTENCY_KEY_REUSED",
+            "This Idempotency-Key was already used for a different order.",
+            409,
+        )
+
+
+def _reuse_existing(existing, requested, fingerprint):
+    """Check a reused key before returning its order. The request must match, and the order must still be live.
+
+    A cancelled order can never be paid, so returning it would leave the student stuck on it.
+    """
+    _assert_same_request(existing, requested, fingerprint)
+    if existing.order_status == OrderStatus.CANCELLED:
+        raise OrderError(
+            "ORDER_CANCELLED",
+            "This order was cancelled. Place a new order.",
+            409,
+        )
+
+
 def payment_window_closed(order, now=None):
     """True once an unpaid order has waited longer than ORDER_PAYMENT_EXPIRY_MINUTES."""
     now = now or utcnow()
@@ -74,34 +108,79 @@ def expire_order(order, now=None):
     ))
 
 
-def expire_unpaid_orders():
-    """Cancel every unpaid order whose payment window has closed. Returns how many.
-
-    Paid orders are never touched. Runs lazily before each new order, and from the
-    `expire-orders` CLI command. The whole sweep is one transaction, so a failure
-    changes nothing.
-    """
-    now = utcnow()
-    candidates = (
-        Order.query.filter(
-            Order.order_status == OrderStatus.PENDING_PAYMENT,
-            Order.payment_status == PaymentStatus.PENDING,
-        )
-        .with_for_update()
-        .all()
+def _unpaid_pending_orders():
+    return Order.query.filter(
+        Order.order_status == OrderStatus.PENDING_PAYMENT,
+        Order.payment_status == PaymentStatus.PENDING,
     )
 
-    try:
-        expired = 0
-        for order in candidates:
-            if payment_window_closed(order, now):
-                expire_order(order, now)
-                expired += 1
-        db.session.commit()
-        return expired
-    except Exception:
-        db.session.rollback()
-        raise
+
+def expire_unpaid_orders(batch_size=DEFAULT_EXPIRY_BATCH_SIZE):
+    """Cancel every unpaid order whose payment window has closed. Returns how many.
+
+    Orders are processed in batches of `batch_size`. Each batch commits on its own, so a long
+    backlog never holds one large transaction open, and a failure undoes only the batch in
+    progress. Paid orders are never touched. Runs lazily before each new order, and from the
+    `expire-orders` CLI command.
+    """
+    if not isinstance(batch_size, int) or not 1 <= batch_size <= MAX_EXPIRY_BATCH_SIZE:
+        raise ValueError(f"batch_size must be between 1 and {MAX_EXPIRY_BATCH_SIZE}.")
+
+    now = utcnow()
+    expired_total = 0
+    last_id = 0
+    while True:
+        try:
+            batch = (
+                _unpaid_pending_orders()
+                .filter(Order.id > last_id)
+                .order_by(Order.id)
+                .with_for_update()
+                .limit(batch_size)
+                .all()
+            )
+            if not batch:
+                return expired_total
+            last_id = batch[-1].id
+
+            expired_in_batch = 0
+            for order in batch:
+                if payment_window_closed(order, now):
+                    expire_order(order, now)
+                    expired_in_batch += 1
+            db.session.commit()
+            expired_total += expired_in_batch
+        except Exception:
+            db.session.rollback()
+            raise
+
+
+def expiry_status(now=None):
+    """Read-only health check for the expiry sweep. It never changes an order.
+
+    `oldest_overdue_minutes` is how far past its payment window the oldest unpaid order is,
+    or None when nothing is overdue. `stalled` is True once that passes
+    ORDER_EXPIRY_ALERT_MINUTES, which usually means the scheduled sweep is not running.
+    """
+    now = now or utcnow()
+    window = timedelta(minutes=current_app.config["ORDER_PAYMENT_EXPIRY_MINUTES"])
+    alert_minutes = current_app.config["ORDER_EXPIRY_ALERT_MINUTES"]
+
+    overdue_count = 0
+    oldest_minutes = None
+    for (created_at,) in _unpaid_pending_orders().with_entities(Order.created_at).all():
+        past_window = (now - window) - as_utc(created_at)
+        if past_window >= timedelta(0):
+            overdue_count += 1
+            minutes = past_window.total_seconds() / 60
+            if oldest_minutes is None or minutes > oldest_minutes:
+                oldest_minutes = minutes
+
+    return {
+        "overdue_orders": overdue_count,
+        "oldest_overdue_minutes": round(oldest_minutes, 2) if oldest_minutes is not None else None,
+        "stalled": oldest_minutes is not None and oldest_minutes > alert_minutes,
+    }
 
 
 def _sweep_expired_orders_safely():
@@ -116,25 +195,46 @@ def _sweep_expired_orders_safely():
         current_app.logger.exception("Could not expire unpaid orders before creating a new order.")
 
 
-def create_order(student_id, raw_items, idempotency_key=None):
+def create_order(
+    student_id,
+    raw_items,
+    idempotency_key=None,
+    customer=None,
+    presence_session_token=None,
+    require_presence=False,
+):
     """Create a pending_payment order and reserve its stock in one transaction.
 
     Returns (order, raw_tracking_token). raw_tracking_token is None when an existing
     order is returned for a retried key, because the raw token was shown the first time.
+    A reused key with a different request raises IDEMPOTENCY_KEY_REUSED (409).
     """
     key = _validate_idempotency_key(idempotency_key)
+    customer = customer or CustomerDetails()
+
+    requested = normalize_requested_items(raw_items)
+    fingerprint = request_fingerprint(requested, customer)
 
     if key:
         existing = _find_existing_order(student_id, key)
         if existing:
+            _reuse_existing(existing, requested, fingerprint)
             return existing, None
 
-    requested = normalize_requested_items(raw_items)
+    presence_session_id = None
+    if require_presence or presence_session_token is not None:
+        presence_session_id = load_presence_session_for_order(
+            presence_session_token,
+            student_id,
+            utcnow(),
+        )
 
-    if not is_accepting_orders():
+    canteen = get_status()
+    if not canteen["is_accepting_orders"]:
+        # Show the message the canteen staff wrote, if they wrote one.
         raise OrderError(
             "CANTEEN_CLOSED",
-            "The canteen is not accepting new orders right now.",
+            canteen["message"] or "The canteen is not accepting new orders right now.",
             409,
         )
 
@@ -154,6 +254,10 @@ def create_order(student_id, raw_items, idempotency_key=None):
         payment_status=PaymentStatus.PENDING,
         order_status=OrderStatus.PENDING_PAYMENT,
         tracking_token_hash=_hash_token(raw_token),
+        request_fingerprint=fingerprint,
+        customer_name=customer.name,
+        customer_phone=customer.phone,
+        instructions=customer.instructions,
     )
 
     for line in priced.lines:
@@ -171,6 +275,8 @@ def create_order(student_id, raw_items, idempotency_key=None):
         db.session.add(order)
         db.session.flush()  # Assigns order.id, which the stock reservations need.
         reserve_stock(order.id, priced.lines)
+        if presence_session_id is not None:
+            consume_presence_session(presence_session_id, student_id, order.id, utcnow())
         db.session.commit()
     except IntegrityError:
         # A parallel request with the same key may have won the race.
@@ -178,6 +284,7 @@ def create_order(student_id, raw_items, idempotency_key=None):
         if key:
             existing = _find_existing_order(student_id, key)
             if existing:
+                _reuse_existing(existing, requested, fingerprint)
                 return existing, None
         raise OrderError(
             "ORDER_CREATE_FAILED",

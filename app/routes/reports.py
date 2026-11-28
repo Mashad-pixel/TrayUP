@@ -1,5 +1,3 @@
-from datetime import date
-
 from flask import Blueprint, current_app, request
 from flask_login import login_required
 
@@ -8,6 +6,7 @@ from app.responses import error_response, success_response
 from app.security.permissions import roles_required
 from app.services.errors import OrderError
 from app.services.report_service import (
+    date_bounds,
     report_categories,
     report_overview,
     report_orders,
@@ -19,27 +18,14 @@ from app.services.report_service import (
 reports_bp = Blueprint("reports", __name__, url_prefix="/api/admin/reports")
 
 
-def _parse_dates():
-    try:
-        start = date.fromisoformat(request.args["from"]) if "from" in request.args else None
-        end = date.fromisoformat(request.args["to"]) if "to" in request.args else None
-    except (ValueError, TypeError) as exc:
-        raise OrderError("INVALID_DATE", "Dates must be YYYY-MM-DD.", 400) from exc
-
-    if (start is None) != (end is None):
-        raise OrderError("INVALID_DATE_RANGE", "Provide both 'from' and 'to'.", 400)
-
-    if start and end:
-        if end < start or (end - start).days > 365:
-            raise OrderError("INVALID_DATE_RANGE", "Date range must be ordered and at most 366 days.", 400)
-
-    return start, end
-
-
 def _run_report(fn, key=None, *args):
-    """Run a report. List results are wrapped under `key` so every response is an object."""
+    """Run a report. List results are wrapped under `key` so every response is an object.
+
+    The date window comes from date_bounds(), the same helper the service documents, so routes
+    and service never disagree about where a canteen day starts and ends.
+    """
     try:
-        start, end = _parse_dates()
+        start, end = date_bounds(request.args)
         result = fn(start, end, *args)
     except OrderError as exc:
         return error_response(exc.code, exc.message, exc.status)
@@ -86,7 +72,7 @@ def categories():
 @roles_required(UserRole.ADMIN)
 def peak_hours():
     try:
-        start, end = _parse_dates()
+        start, end = date_bounds(request.args)
         hours = report_peak_hours(start, end)
     except OrderError as exc:
         return error_response(exc.code, exc.message, exc.status)

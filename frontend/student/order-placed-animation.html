@@ -1,21 +1,25 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="0;url=./confirmation.html">
-  <title>Order confirmed — TrayUP</title>
-  <style>
-    body { margin: 0; padding: 24px; background: #f5f1e8; color: #173f35; font: 16px/1.5 system-ui, sans-serif; }
-    main { max-width: 560px; margin: 15vh auto; padding: 28px; border-radius: 18px; background: #fff; box-shadow: 0 12px 32px rgba(31,42,36,.1); }
-    a { color: #173f35; font-weight: 700; }
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Order confirmed — TrayUP</title>
+<link rel="stylesheet" href="../css/global.css"><link rel="stylesheet" href="../css/components.css"><link rel="stylesheet" href="../css/student.css">
+<style>
+.confirm-wrap{max-width:720px;margin:52px auto;padding:0 18px}.confirm-card{padding:32px;border-radius:22px;background:#fffaf2;border:1px solid rgba(80,48,25,.14);box-shadow:0 18px 55px rgba(54,35,20,.09)}
+.check{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:#e6f4e9;color:#247a3c;font-size:32px;margin-bottom:18px}.muted{color:var(--muted)}.order-number{font-size:1.35rem;font-weight:700;letter-spacing:.04em}.status-pill{display:inline-block;padding:7px 12px;border-radius:999px;background:#f1e6d2;font-weight:600;text-transform:capitalize}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}.actions a{display:inline-block;text-decoration:none}.line{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid rgba(80,48,25,.12)}
+</style>
 </head>
-<body>
-  <main>
-    <p>Your order details are ready.</p>
-    <a href="./confirmation.html">Continue to your order</a>
-  </main>
-  <script>window.location.replace("./confirmation.html");</script>
-</body>
-</html>
+<body class="student-page">
+<div id="app-header"></div>
+<main class="confirm-wrap"><section class="confirm-card">
+<div class="check" aria-hidden="true">✓</div><h1 style="font-family:var(--serif);font-size:40px;font-weight:400">Payment received</h1>
+<p class="muted" id="intro">Your payment is being confirmed by the server.</p>
+<div style="margin-top:24px"><div class="muted">Receipt number</div><div class="order-number" id="receipt">Loading…</div></div>
+<div style="margin-top:20px"><div class="muted">Current order status</div><p><span class="status-pill" id="order-status">Checking…</span></p><p class="muted" id="payment-status"></p></div>
+<div id="order-items" style="margin-top:18px"></div>
+<div class="actions"><a class="btn btn-primary" id="track-link" href="./tracking.html">Track my order</a><a class="btn btn-secondary" href="../index.html">Continue shopping</a></div>
+<p class="muted" id="error" role="status" style="margin-top:16px"></p>
+</section></main>
+<script src="../shared/config.js"></script><script src="../shared/api.js"></script><script src="../shared/notifications.js"></script>
+<script src="./js/order-confirmation.js"></script>
+</body></html>

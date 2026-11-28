@@ -1,5 +1,6 @@
 from app.extensions import db
 from app.models.user import User
+from tests.presence_helpers import presence_headers_for
 
 STUDENT_EMAIL = "student@test.com"
 STUDENT_MOBILE = "+919876500001"
@@ -91,7 +92,7 @@ def test_real_login_can_create_order(anon_client, student, menu):
     response = anon_client.post(
         "/api/orders",
         json={"items": [{"menu_item_id": menu["samosa"].id, "quantity": 2}]},
-        headers={"Idempotency-Key": "real-login-test"},
+        headers={**presence_headers_for(anon_client), "Idempotency-Key": "real-login-test"},
     )
 
     assert response.status_code == 201

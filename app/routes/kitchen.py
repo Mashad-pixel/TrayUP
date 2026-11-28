@@ -10,11 +10,11 @@ from app.services.errors import OrderError
 from app.services.kitchen_service import (
     change_order_status,
     get_kitchen_queue,
-    get_pending_confirmation_orders,
     parse_queue_limit,
 )
 from app.services.order_serializer import serialize_order
-from app.services.payment_service import confirm_manual_payment, reject_manual_payment
+from app.models.order import Order, PaymentStatus
+from app.services.upi_payment_service import confirm_upi_payment, reject_upi_payment
 
 kitchen_bp = Blueprint("kitchen", __name__, url_prefix="/api/kitchen")
 
@@ -113,51 +113,52 @@ def confirm_collection_code():
     return success_response("Order collected", serialize_order(order))
 
 
-@kitchen_bp.route("/orders/pending-confirmation", methods=["GET"])
+@kitchen_bp.get("/orders/pending-confirmation")
 @login_required
 @roles_required(*KITCHEN_ACCESS)
-def orders_pending_confirmation():
-    try:
-        limit = parse_queue_limit(request.args.get("limit"))
-        orders = get_pending_confirmation_orders(limit)
-    except OrderError as exc:
-        return _order_error(exc)
-
-    return success_response("Orders awaiting payment confirmation retrieved", {
+def pending_payment_confirmations():
+    orders = (
+        Order.query
+        .filter_by(payment_status=PaymentStatus.AWAITING_CONFIRMATION)
+        .order_by(Order.created_at, Order.id)
+        .all()
+    )
+    return success_response("Pending payment confirmations", {
         "orders": [serialize_order(order) for order in orders],
-        "count": len(orders),
-        "limit": limit,
     })
 
 
-@kitchen_bp.route("/orders/<int:order_id>/confirm-payment", methods=["POST"])
+@kitchen_bp.post("/orders/<int:order_id>/confirm-payment")
 @login_required
 @roles_required(*KITCHEN_ACCESS)
-def confirm_order_payment(order_id):
-    payload = request.get_json(silent=True) or {}
-    notes = payload.get("notes") if isinstance(payload, dict) else None
-
+def confirm_payment(order_id):
+    payload = request.get_json(silent=True)
+    if payload is not None and not isinstance(payload, dict):
+        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
     try:
-        order, refund_required = confirm_manual_payment(order_id, current_user.id, notes=notes)
+        order = confirm_upi_payment(
+            order_id,
+            current_user.id,
+            payload.get("notes", "") if payload else "",
+        )
     except OrderError as exc:
         return _order_error(exc)
-
-    return success_response("Payment confirmed successfully", {
-        "order": serialize_order(order),
-        "refund_required": refund_required,
-    })
+    return success_response("Payment confirmed", {"order": serialize_order(order)})
 
 
-@kitchen_bp.route("/orders/<int:order_id>/reject-payment", methods=["POST"])
+@kitchen_bp.post("/orders/<int:order_id>/reject-payment")
 @login_required
 @roles_required(*KITCHEN_ACCESS)
-def reject_order_payment(order_id):
-    payload = request.get_json(silent=True) or {}
-    reason = payload.get("reason") if isinstance(payload, dict) else None
-
+def reject_payment(order_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
     try:
-        order = reject_manual_payment(order_id, current_user.id, reason=reason)
+        order = reject_upi_payment(
+            order_id,
+            current_user.id,
+            payload.get("reason", ""),
+        )
     except OrderError as exc:
         return _order_error(exc)
-
-    return success_response("Payment rejected and order cancelled", serialize_order(order))
+    return success_response("Payment rejected", serialize_order(order))

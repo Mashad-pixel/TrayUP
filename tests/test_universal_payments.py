@@ -18,6 +18,7 @@ from app.services.upi_service import (
     render_upi_qr_svg,
     verify_phonepe_signature,
 )
+from tests.session_helpers import issue_test_session
 
 
 def make_user(email, role, name="Test User"):
@@ -32,6 +33,7 @@ def login_as(test_client, user):
     with test_client.session_transaction() as sess:
         sess["_user_id"] = str(user.id)
         sess["_fresh"] = True
+        sess["sid"] = issue_test_session(user)
     return test_client
 
 

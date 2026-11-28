@@ -7,7 +7,7 @@ from app.models.user import UserRole
 from app.responses import error_response, success_response
 from app.security.permissions import roles_required
 from app.services.errors import OrderError
-from app.services.refund_service import request_refund
+from app.services.refund_service import list_payment_summaries, list_recent_refunds, request_refund
 
 admin_refunds_bp = Blueprint("admin_refunds", __name__, url_prefix="/api/admin/payments")
 
@@ -82,3 +82,34 @@ def list_refunds(payment_id):
 
     refunds = Refund.query.filter_by(payment_id=payment_id).order_by(Refund.created_at.asc()).all()
     return success_response("Refunds retrieved", [serialize_refund(item) for item in refunds])
+
+
+@admin_refunds_bp.route("", methods=["GET"])
+@login_required
+@roles_required(UserRole.ADMIN)
+def list_payments():
+    """Payments with refund totals and what can still be refunded. Newest first."""
+    limit = _limit_arg(default=50, maximum=200)
+    if limit is None:
+        return error_response("INVALID_PAGINATION", "'limit' must be between 1 and 200.", 400)
+    return success_response("Payments retrieved", {"payments": list_payment_summaries(limit)})
+
+
+@admin_refunds_bp.route("/refunds", methods=["GET"])
+@login_required
+@roles_required(UserRole.ADMIN)
+def list_all_refunds():
+    """Recent refunds across all orders, newest first."""
+    limit = _limit_arg(default=50, maximum=200)
+    if limit is None:
+        return error_response("INVALID_PAGINATION", "'limit' must be between 1 and 200.", 400)
+    return success_response("Refunds retrieved", {"refunds": list_recent_refunds(limit)})
+
+
+def _limit_arg(default, maximum):
+    raw = request.args.get("limit", str(default))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if 1 <= value <= maximum else None

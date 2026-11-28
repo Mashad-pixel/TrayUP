@@ -1,0 +1,10 @@
+(function(){
+ const q=new URLSearchParams(location.search),id=Number(q.get("order_id"));
+ const receipt=document.getElementById("receipt"),status=document.getElementById("order-status"),payment=document.getElementById("payment-status"),items=document.getElementById("order-items"),error=document.getElementById("error"),intro=document.getElementById("intro");
+ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ document.getElementById("track-link").href=Number.isInteger(id)&&id>0?`./tracking.html?order_id=${id}`:"./tracking.html";
+ if(q.get("cart_clear_failed")==="1") error.textContent="Your payment was confirmed, but this browser could not clear the saved cart. Review your cart before placing another order.";
+ if(!Number.isInteger(id)||id<1){receipt.textContent=q.get("receipt")||"Unavailable";status.textContent="Unknown";error.textContent="The order ID is missing. Open My Orders to check your order.";return;}
+ async function load(){try{const r=await trayApi.get(`/orders/${id}`);const o=r?.data||{};receipt.textContent=o.order_number||q.get("receipt")||`#${id}`;status.textContent=(o.order_status||"unknown").replaceAll("_"," ");payment.textContent=`Payment: ${o.payment_status||"unknown"}`;intro.textContent=o.order_status==="collected"?"Your order has been collected. Thank you.":o.order_status==="ready"?"Your order is ready. Show your collection QR code at the counter.":"Your order is confirmed. Follow its real status below; TrayUP orders are collected at the canteen counter.";items.innerHTML=(o.items||[]).map(x=>`<div class="line"><span>${Number(x.quantity)||1} × ${esc(x.item_name)}</span><strong>₹${(Number(x.line_total_paise||0)/100).toLocaleString("en-IN")}</strong></div>`).join("")+`<div class="line"><strong>Total</strong><strong>₹${(Number(o.total_paise||0)/100).toLocaleString("en-IN")}</strong></div>`;}catch(e){error.textContent=[error.textContent,e.status===401?"Your session has expired. Sign in and open My Orders.":e.message||"Could not load order details. Open My Orders to check."].filter(Boolean).join(" ");}}
+ load();
+})();

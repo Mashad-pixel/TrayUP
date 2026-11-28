@@ -1,6 +1,6 @@
 # Demo food images
 
-All 43 demo products use distinct, remotely hosted Unsplash food photography URLs from `frontend/shared/demo-data.js`.
+The 43 starter dishes use distinct, remotely hosted Unsplash food photography URLs. They are stored in `app/data/menu_seed.json` and loaded by `flask --app wsgi:app seed-menu`.
 
 The URLs are high-resolution crop URLs with `w=900&q=82`. If a remote image fails, each product card and order card falls back to a clean generated placeholder.
 

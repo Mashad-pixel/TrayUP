@@ -5,7 +5,7 @@
     products: [
       { id: 1, name: "Masala Dosa", category: "Breakfast", price: 60, description: "Crisp dosa filled with spiced potato masala.", image: image("photo-1668236543090-82eba5ee5976"), isVeg: true, rating: 4.8, isPopular: true, isAvailable: true },
       { id: 2, name: "Idli Sambar", category: "Breakfast", price: 40, description: "Soft steamed idlis with warm lentil sambar.", image: image("photo-1589301760014-d929f3979dbc"), isVeg: true, rating: 4.5, isPopular: false, isAvailable: true },
-      { id: 3, name: "Poori Bhaji", category: "Breakfast", price: 55, description: "Fluffy pooris served with potato bhaji.", image: image("photo-1789990642036-e10c2df4fc81"), isVeg: true, rating: 4.6, isPopular: false, isAvailable: true },
+      { id: 3, name: "Poori Bhaji", category: "Breakfast", price: 55, description: "Fluffy pooris served with potato bhaji.", image: image("photo-1596040033229-a9821ebd058d"), isVeg: true, rating: 4.6, isPopular: false, isAvailable: true },
       { id: 4, name: "Vegetable Upma", category: "Breakfast", price: 35, description: "Savory semolina cooked with vegetables.", image: image("photo-1630383249896-424e482df921"), isVeg: true, rating: 4.3, isPopular: false, isAvailable: true },
       { id: 5, name: "Paneer Paratha", category: "Breakfast", price: 70, description: "Whole-wheat paratha stuffed with seasoned paneer.", image: image("photo-1599487488170-d11ec9c172f0"), isVeg: true, rating: 4.7, isPopular: false, isAvailable: true },
       { id: 6, name: "Plain Dosa", category: "Breakfast", price: 45, description: "Thin, crisp golden rice and lentil dosa.", image: image("photo-1694849789325-914b71ab4075"), isVeg: true, rating: 4.4, isPopular: false, isAvailable: true },
@@ -49,6 +49,41 @@
       { id: 41, name: "Oreo Milkshake", category: "Drinks", price: 90, description: "Chocolate cookies blended with cold milk.", image: image("photo-1572490122747-3968b75cc699"), isVeg: true, rating: 4.7, isPopular: false, isAvailable: true },
       { id: 42, name: "Chocolate Milkshake", category: "Drinks", price: 80, description: "Rich chocolate milkshake topped with cream.", image: image("photo-1541658016709-82535e94bc69"), isVeg: true, rating: 4.6, isPopular: false, isAvailable: true },
       { id: 43, name: "Water Bottle", category: "Drinks", price: 20, description: "Chilled sealed packaged drinking water.", image: image("photo-1602143407151-7111542de6e8"), isVeg: true, rating: 4.2, isPopular: false, isAvailable: true }
+    ],
+
+    orders: [
+      { id: "TY1001", items: [{ productId: 12, quantity: 1 }], total: 150, status: "Collected" },
+      { id: "TY1002", items: [{ productId: 1, quantity: 2 }], total: 120, status: "Preparing" },
+      { id: "TY1003", items: [{ productId: 34, quantity: 1 }, { productId: 26, quantity: 1 }], total: 150, status: "On the way" },
+      { id: "TY1004", items: [{ productId: 11, quantity: 1 }], total: 120, status: "Collected" },
+      { id: "TY1005", items: [{ productId: 22, quantity: 2 }], total: 30, status: "Cancelled" }
+    ],
+
+    sampleSales: [
+      { period: "day", productId: 12, quantity: 24 },
+      { period: "day", productId: 1, quantity: 21 },
+      { period: "day", productId: 23, quantity: 18 },
+      { period: "day", productId: 34, quantity: 16 },
+      { period: "day", productId: 13, quantity: 14 },
+      { period: "day", productId: 28, quantity: 12 },
+      { period: "day", productId: 11, quantity: 10 },
+      { period: "day", productId: 26, quantity: 9 },
+      { period: "week", productId: 1, quantity: 138 },
+      { period: "week", productId: 12, quantity: 126 },
+      { period: "week", productId: 34, quantity: 102 },
+      { period: "week", productId: 23, quantity: 96 },
+      { period: "week", productId: 13, quantity: 83 },
+      { period: "week", productId: 11, quantity: 76 },
+      { period: "week", productId: 28, quantity: 68 },
+      { period: "week", productId: 26, quantity: 59 },
+      { period: "month", productId: 12, quantity: 514 },
+      { period: "month", productId: 13, quantity: 468 },
+      { period: "month", productId: 1, quantity: 441 },
+      { period: "month", productId: 11, quantity: 386 },
+      { period: "month", productId: 23, quantity: 354 },
+      { period: "month", productId: 34, quantity: 329 },
+      { period: "month", productId: 28, quantity: 298 },
+      { period: "month", productId: 26, quantity: 247 }
     ]
   };
 
@@ -103,52 +138,6 @@
     41: ["Chocolate sandwich cookies", "Milk", "Vanilla ice cream"],
     42: ["Milk", "Cocoa", "Sugar", "Chocolate ice cream"],
     43: ["Packaged drinking water"]
-  };
-
-  const nutritionByProduct = {
-    1: { energy: 320, protein: 8, carbohydrates: 48, fat: 10, fiber: 4, sugars: 4, sodium: 650 },
-    2: { energy: 250, protein: 9, carbohydrates: 45, fat: 3, fiber: 7, sugars: 5, sodium: 700 },
-    3: { energy: 460, protein: 8, carbohydrates: 66, fat: 18, fiber: 8, sugars: 4, sodium: 700 },
-    4: { energy: 280, protein: 7, carbohydrates: 45, fat: 8, fiber: 5, sugars: 4, sodium: 550 },
-    5: { energy: 360, protein: 12, carbohydrates: 42, fat: 16, fiber: 5, sugars: 4, sodium: 650 },
-    6: { energy: 190, protein: 5, carbohydrates: 36, fat: 4, fiber: 2, sugars: 1, sodium: 450 },
-    7: { energy: 240, protein: 7, carbohydrates: 38, fat: 6, fiber: 3, sugars: 3, sodium: 500 },
-    8: { energy: 300, protein: 9, carbohydrates: 43, fat: 10, fiber: 5, sugars: 1, sodium: 500 },
-    9: { energy: 330, protein: 7, carbohydrates: 48, fat: 12, fiber: 6, sugars: 2, sodium: 500 },
-    10: { energy: 350, protein: 16, carbohydrates: 32, fat: 17, fiber: 2, sugars: 4, sodium: 650 },
-    11: { energy: 650, protein: 18, carbohydrates: 105, fat: 18, fiber: 12, sugars: 12, sodium: 1200 },
-    12: { energy: 650, protein: 32, carbohydrates: 78, fat: 22, fiber: 4, sugars: 5, sodium: 1100 },
-    13: { energy: 420, protein: 18, carbohydrates: 20, fat: 30, fiber: 4, sugars: 9, sodium: 850 },
-    14: { energy: 320, protein: 7, carbohydrates: 55, fat: 9, fiber: 5, sugars: 4, sodium: 600 },
-    15: { energy: 480, protein: 17, carbohydrates: 78, fat: 11, fiber: 12, sugars: 5, sodium: 900 },
-    16: { energy: 430, protein: 15, carbohydrates: 62, fat: 12, fiber: 3, sugars: 4, sodium: 950 },
-    17: { energy: 490, protein: 25, carbohydrates: 62, fat: 15, fiber: 3, sugars: 4, sodium: 1000 },
-    18: { energy: 400, protein: 10, carbohydrates: 66, fat: 11, fiber: 5, sugars: 8, sodium: 1000 },
-    19: { energy: 620, protein: 18, carbohydrates: 92, fat: 20, fiber: 13, sugars: 9, sodium: 1100 },
-    20: { energy: 520, protein: 19, carbohydrates: 86, fat: 10, fiber: 14, sugars: 7, sodium: 900 },
-    21: { energy: 430, protein: 12, carbohydrates: 72, fat: 11, fiber: 10, sugars: 6, sodium: 850 },
-    22: { energy: 280, protein: 5, carbohydrates: 35, fat: 14, fiber: 4, sugars: 2, sodium: 400 },
-    23: { energy: 560, protein: 14, carbohydrates: 78, fat: 22, fiber: 10, sugars: 12, sodium: 1100 },
-    24: { energy: 260, protein: 5, carbohydrates: 34, fat: 12, fiber: 3, sugars: 4, sodium: 550 },
-    25: { energy: 180, protein: 4, carbohydrates: 32, fat: 5, fiber: 5, sugars: 6, sodium: 500 },
-    26: { energy: 340, protein: 4, carbohydrates: 45, fat: 16, fiber: 4, sugars: 1, sodium: 400 },
-    27: { energy: 300, protein: 9, carbohydrates: 42, fat: 10, fiber: 5, sugars: 6, sodium: 650 },
-    28: { energy: 520, protein: 18, carbohydrates: 54, fat: 27, fiber: 6, sugars: 9, sodium: 1000 },
-    29: { energy: 590, protein: 28, carbohydrates: 50, fat: 30, fiber: 3, sugars: 8, sodium: 1200 },
-    30: { energy: 280, protein: 8, carbohydrates: 48, fat: 6, fiber: 4, sugars: 3, sodium: 500 },
-    31: { energy: 320, protein: 16, carbohydrates: 44, fat: 8, fiber: 2, sugars: 2, sodium: 650 },
-    32: { energy: 300, protein: 7, carbohydrates: 32, fat: 17, fiber: 4, sugars: 5, sodium: 550 },
-    33: { energy: 360, protein: 15, carbohydrates: 42, fat: 15, fiber: 3, sugars: 5, sodium: 750 },
-    34: { energy: 280, protein: 8, carbohydrates: 40, fat: 10, fiber: 1, sugars: 32, sodium: 120 },
-    35: { energy: 150, protein: 1, carbohydrates: 38, fat: 1, fiber: 3, sugars: 32, sodium: 10 },
-    36: { energy: 120, protein: 4, carbohydrates: 18, fat: 4, fiber: 0, sugars: 15, sodium: 60 },
-    37: { energy: 100, protein: 0, carbohydrates: 26, fat: 0, fiber: 1, sugars: 24, sodium: 350 },
-    38: { energy: 240, protein: 8, carbohydrates: 36, fat: 8, fiber: 2, sugars: 30, sodium: 100 },
-    39: { energy: 210, protein: 7, carbohydrates: 38, fat: 4, fiber: 0, sugars: 34, sodium: 90 },
-    40: { energy: 80, protein: 4, carbohydrates: 8, fat: 3, fiber: 0, sugars: 7, sodium: 500 },
-    41: { energy: 430, protein: 9, carbohydrates: 62, fat: 16, fiber: 2, sugars: 48, sodium: 450 },
-    42: { energy: 390, protein: 10, carbohydrates: 54, fat: 16, fiber: 3, sugars: 45, sodium: 220 },
-    43: {}
   };
 
   const historyByCategory = {
@@ -470,20 +459,89 @@
     ]
   };
 
-  demoData.products = demoData.products.map((product) => {
-    const details = { ...product };
-    delete details.rating;
-    details.isFeatured = Boolean(details.isPopular);
-    delete details.isPopular;
-    return {
-      ...details,
-      history: foodHistory[product.id] || historyByCategory[product.category],
-      ingredients: ingredientsByProduct[product.id] || ingredientsByCategory[product.category],
-      preparation: preparationByProduct[product.id],
-      recipeSteps: recipeStepsByProduct[product.id] || [],
-      nutrition: nutritionByProduct[product.id] || {}
+  demoData.products = demoData.products.map((product) => ({
+    ...product,
+    history: foodHistory[product.id] || historyByCategory[product.category],
+    ingredients: ingredientsByProduct[product.id] || ingredientsByCategory[product.category],
+    preparation: preparationByProduct[product.id],
+    recipeSteps: recipeStepsByProduct[product.id] || []
+  }));
+
+  const activityKey = "trayup-order-activity";
+  const ordersKey = "trayup-user-orders";
+
+  function getActivity() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(activityKey) || "null");
+      if (Array.isArray(saved)) return saved;
+
+      const now = new Date();
+      const seeded = demoData.sampleSales.map((sale, index) => {
+        const orderedAt = new Date(now);
+        if (sale.period === "day") {
+          orderedAt.setHours(Math.max(0, now.getHours() - 1), index % 60, 0, 0);
+        } else if (sale.period === "week") {
+          orderedAt.setDate(now.getDate() - (1 + (index % 6)));
+        } else {
+          orderedAt.setDate(now.getDate() - (8 + (index % 22)));
+        }
+        return {
+          productId: sale.productId,
+          quantity: sale.quantity,
+          orderedAt: orderedAt.toISOString()
+        };
+      });
+      localStorage.setItem(activityKey, JSON.stringify(seeded));
+      return seeded;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function nextReceiptNumber(orders) {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, "0");
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const prefix = `${day}${month}`;
+    let sequence = 0;
+
+    orders.forEach((order) => {
+      const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+      if (!createdAt || Number.isNaN(createdAt.getTime())) return;
+      if (createdAt.getDate() !== now.getDate() || createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) return;
+      const match = String(order.id || "").match(new RegExp(`^${prefix}(\\d+)$`));
+      if (match) sequence = Math.max(sequence, Number(match[1]));
+    });
+
+    return `${prefix}${sequence + 1}`;
+  }
+
+  demoData.getOrderActivity = getActivity;
+  demoData.recordOrder = function (order) {
+    let orders = [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(ordersKey) || "[]");
+      if (Array.isArray(saved)) orders = saved;
+    } catch (_) {}
+    const savedOrder = {
+      ...order,
+      id: order.id || nextReceiptNumber(orders),
+      createdAt: order.createdAt || new Date().toISOString()
     };
-  });
+    orders.unshift(savedOrder);
+    try { localStorage.setItem(ordersKey, JSON.stringify(orders)); } catch (_) {}
+
+    const activity = getActivity();
+    savedOrder.items.forEach((entry) => {
+      const productId = Number(entry.productId || entry.id);
+      const quantity = Number(entry.quantity || entry.qty || 1);
+      if (demoData.products.some((product) => product.id === productId) && quantity > 0) {
+        activity.push({ productId, quantity, orderedAt: savedOrder.createdAt, orderId: savedOrder.id });
+      }
+    });
+    try { localStorage.setItem(activityKey, JSON.stringify(activity)); } catch (_) {}
+    return savedOrder;
+  };
 
   window.trayDemoData = demoData;
 })();

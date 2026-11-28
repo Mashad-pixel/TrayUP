@@ -1,51 +1,75 @@
+// Administrator overview. Figures come from the reporting overview API for two windows: today and
+// the last 30 days (canteen-local days). If a request fails, the page says so and shows no figures.
 (function () {
-  const nav = [["Overview","dashboard.html"],["Menu","menu.html"],["Categories","categories.html"],["Orders","orders.html"],["Staff","staff.html"],["Reports","reports.html"],["Refunds","refunds.html"],["Settings","settings.html"]];
-  const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  document.getElementById("admin-nav").innerHTML = nav.map(([name,file]) =>
-    '<a class="' + (file==="dashboard.html"?"active":"") + '" href="./' + file + '">' + esc(name) + "</a>"
-  ).join("");
-  function renderOrders(orders) {
-    const body=document.getElementById("admin-orders");
-    body.innerHTML=orders.length?orders.slice(0,8).map(o =>
-      "<tr><td>"+esc(o.order_number||o.id)+"</td><td>"+esc(o.student_name||"Guest")+
-      "</td><td>₹"+Number(o.total_amount||o.amount||0).toLocaleString("en-IN")+
-      '</td><td><span class="status">'+esc(o.status||"—")+"</span></td><td>"+esc(o.payment_status||"—")+"</td></tr>"
-    ).join(""):'<tr><td colspan="5">No orders available</td></tr>';
+  "use strict";
+
+  const ui = window.trayUI;
+  const statsBox = document.getElementById("admin-stats");
+  const rows = document.getElementById("admin-orders");
+
+  function stat(label, value) {
+    return ui.el("div", { class: "admin-card" }, [ui.el("span", { text: label }), ui.el("div", { class: "value", text: value })]);
   }
-  function renderDemo() {
-    const demo=[["Total orders","148"],["Today's orders","24"],["Today's revenue","₹18,450"],["Successful payments","23"]];
-    document.getElementById("admin-stats").innerHTML=demo.map(([label,value])=>
-      '<div class="admin-card"><span>'+label+'</span><div class="value">'+value+"</div></div>"
-    ).join("")+'<div class="admin-card" style="grid-column:1/-1"><span class="status warning">Read-only demo data</span></div>';
-    renderOrders([{order_number:"TUP-4825",student_name:"Aarav Shah",total_amount:310,status:"Preparing",payment_status:"Captured"},
-      {order_number:"TUP-4821",student_name:"Meera Iyer",total_amount:225,status:"Ready",payment_status:"Captured"}]);
+
+  function windowCards(title, summary) {
+    return ui.el("div", { class: "ui-section" }, [
+      ui.el("h2", { text: title }),
+      ui.el("div", { class: "admin-stats" }, [
+        stat("Orders", String(summary.total_orders)),
+        stat("Paid", String(summary.paid_orders)),
+        stat("Gross revenue", ui.money(summary.gross_revenue_paise)),
+        stat("Net revenue", ui.money(summary.net_revenue_paise)),
+        stat("Average order", ui.money(summary.average_order_value_paise)),
+        stat("Collected", `${summary.completion_rate_percent}%`)
+      ])
+    ]);
   }
+
+  function orderRow(order) {
+    return ui.el("tr", null, [
+      ui.el("td", { text: order.order_number || String(order.id) }),
+      ui.el("td", { text: (order.student && order.student.name) || "Guest" }),
+      ui.el("td", { class: "ui-num", text: ui.money(order.total_paise) }),
+      ui.el("td", { text: order.order_status || "—" }),
+      ui.el("td", { text: order.payment_status || "—" })
+    ]);
+  }
+
+  function messageRow(text) {
+    return ui.el("tr", null, [ui.el("td", { colspan: 5, class: "ui-muted", text })]);
+  }
+
+  function showError(error) {
+    const described = ui.describeError(error);
+    const text = described.signIn
+      ? described.text
+      : "Could not load the figures or orders. Nothing is shown in their place. Refresh the page to try again.";
+    statsBox.replaceChildren(ui.el("div", { class: "admin-card status warning", style: "grid-column:1/-1" }, [
+      ui.el("span", { text }),
+      described.signIn ? ui.el("div", { class: "value", style: "font-size:16px" }, [ui.el("a", { href: "./login.html", style: "text-decoration:underline", text: "Sign in" })]) : null
+    ]));
+    rows.replaceChildren(messageRow(described.signIn ? "Sign in to view orders" : "Could not load orders"));
+  }
+
   async function load() {
-    if (new URLSearchParams(location.search).get("demo")==="1") return renderDemo();
+    const today = ui.canteenToday();
+    const monthStart = ui.addDays(today, -29);
     try {
-      const response=await trayApi.get("/admin/orders");
-      const orders=response?.data?.orders||[];
-      const total=orders.reduce((sum,o)=>sum+Number(o.total_amount||o.amount||0),0);
-      const stats=[["Orders",orders.length],["Total value","₹"+total.toLocaleString("en-IN")],
-        ["Paid",orders.filter(o=>o.payment_status==="captured").length],
-        ["Pending",orders.filter(o=>o.status==="received").length]];
-      document.getElementById("admin-stats").innerHTML=stats.map(([label,value])=>
-        '<div class="admin-card"><span>'+esc(label)+'</span><div class="value">'+esc(value)+"</div></div>"
-      ).join("");
-      renderOrders(orders);
-    } catch(error) {
-      const message=error.status===401?"Please sign in to view administrator data.":
-        error.status===403?"This account does not have administrator access.":"Unable to load administrator data. Please retry.";
-      document.getElementById("admin-stats").textContent=message;
-      document.getElementById("admin-orders").textContent=message;
-      if(error.status===401||error.status===403){
-        document.getElementById("admin-stats").innerHTML='<div class="admin-card"><span>'+esc(message)+
-          '</span><div class="value" style="font-size:18px"><a href="./login.html">Sign in</a></div></div>';
-      }
+      const [todayReport, monthReport, recent] = await Promise.all([
+        trayApi.get(`/admin/reports/overview?from=${today}&to=${today}`),
+        trayApi.get(`/admin/reports/overview?from=${monthStart}&to=${today}`),
+        trayApi.get("/admin/orders?per_page=8")
+      ]);
+      statsBox.replaceChildren(
+        windowCards(`Today (${ui.formatDay(today)})`, todayReport.data),
+        windowCards(`Last 30 days (${ui.formatDay(monthStart)} to ${ui.formatDay(today)})`, monthReport.data)
+      );
+      const orders = recent.data.orders || [];
+      rows.replaceChildren(...(orders.length ? orders.map(orderRow) : [messageRow("No orders yet")]));
+    } catch (error) {
+      showError(error);
     }
   }
-  document.getElementById("logout").addEventListener("click",async()=>{
-    try{await trayAuth.logout();}catch(_){} location.href="./login.html";
-  });
+
   load();
 })();

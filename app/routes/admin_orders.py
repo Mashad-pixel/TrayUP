@@ -41,11 +41,15 @@ def list_all_orders():
     except OrderError as exc:
         return _order_error(exc)
 
+    search = (request.args.get("q") if request.args.get("q") is not None else request.args.get("search") or "").strip()
+    if len(search) > 100:
+        return error_response("INVALID_FILTER", "Search text cannot exceed 100 characters.", 400)
     pagination = list_orders_for_admin(
         page,
         per_page,
         order_status=order_status,
         payment_status=payment_status,
+        search=search or None,
     )
     students = get_students_for_orders(pagination.items)
 

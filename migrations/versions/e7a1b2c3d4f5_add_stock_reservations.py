@@ -53,6 +53,10 @@ def downgrade():
 
     op.drop_table('stock_reservations')
 
-    # Dropping the column also drops the check constraints that use it.
+    # SQLite rebuilds the table for this change, so the check constraints that mention the
+    # column must be dropped first. Otherwise the rebuild copies them and fails. Postgres
+    # accepts the same explicit drops.
     with op.batch_alter_table('menu_items', schema=None) as batch_op:
+        batch_op.drop_constraint('ck_menu_items_reserved_within_stock', type_='check')
+        batch_op.drop_constraint('ck_menu_items_reserved_non_negative', type_='check')
         batch_op.drop_column('reserved_quantity')

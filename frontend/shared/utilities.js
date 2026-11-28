@@ -1,9 +1,13 @@
 (function () {
   window.trayUtils = {
     escapeHtml(value) {
-      const node = document.createElement("span");
-      node.textContent = value == null ? "" : String(value);
-      return node.innerHTML;
+      return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      })[character]);
     },
     rupees(value) {
       return `₹${Number(value).toLocaleString("en-IN")}`;

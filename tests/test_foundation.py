@@ -1,8 +1,10 @@
+from tests.session_helpers import issue_test_session
 import pytest
 
 from app.extensions import db
 from app.models.menu import MenuItem
 from app.models.user import User, UserRole
+from tests.presence_helpers import presence_headers_for
 
 
 def _client_for_role(app, role, email):
@@ -14,6 +16,7 @@ def _client_for_role(app, role, email):
     with client.session_transaction() as session:
         session["_user_id"] = str(user.id)
         session["_fresh"] = True
+        session["sid"] = issue_test_session(user)
     return client
 
 
@@ -69,6 +72,7 @@ def test_order_creation_is_blocked_when_canteen_is_closed(app, admin_client, cli
     response = client.post(
         "/api/orders",
         json={"items": [{"menu_item_id": menu["tea"].id, "quantity": 1}]},
+        headers=presence_headers_for(client),
     )
     assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "CANTEEN_CLOSED"
@@ -155,7 +159,7 @@ def test_state_changing_requests_require_csrf_token(app, client, menu):
     accepted = client.post(
         "/api/orders",
         json=payload,
-        headers={"X-CSRFToken": token},
+        headers={"X-CSRFToken": token, **presence_headers_for(client)},
     )
     assert accepted.status_code == 201
 
